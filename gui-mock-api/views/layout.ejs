@@ -4,17 +4,97 @@
     <meta charset="utf-8" />
     <title><%= title || 'GUI Mock API' %></title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <style>
+      .top-bar {
+        background: linear-gradient(90deg, #0d6efd, #6610f2);
+        color: #fff;
+        padding: 0.75rem 0;
+      }
+
+      .top-bar__content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+
+      .top-bar__brand {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-weight: 600;
+        font-size: 1.1rem;
+      }
+
+      .top-bar__brand img {
+        height: 40px;
+        width: 40px;
+        object-fit: contain;
+        border-radius: 50%;
+        background-color: #fff;
+        padding: 0.25rem;
+      }
+
+      .top-bar__banner {
+        font-size: 0.95rem;
+      }
+
+      header.site-header {
+        background: #f8f9fa;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        margin-bottom: 1.5rem;
+      }
+
+      header.site-header .container {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 1rem;
+        padding: 1.25rem 0;
+      }
+
+      header.site-header h1 {
+        margin: 0;
+        font-size: 1.75rem;
+      }
+
+      header.site-header nav {
+        margin-left: auto;
+      }
+
+      header.site-header nav ul {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        margin: 0;
+      }
+
+      header.site-header nav ul li:last-child a {
+        box-shadow: 0 0.25rem 0.75rem rgba(13, 110, 253, 0.25);
+      }
+    </style>
   </head>
   <body>
     <% const layoutAdminKey = typeof adminKey !== 'undefined' ? adminKey : null; %>
-    <header class="container">
-      <h1><%= title || 'GUI Mock API' %></h1>
-      <nav>
-        <ul>
-          <li><a href="/admin<%= layoutAdminKey ? `?key=${encodeURIComponent(layoutAdminKey)}` : '' %>">Routes</a></li>
-          <li><a href="/admin/new<%= layoutAdminKey ? `?key=${encodeURIComponent(layoutAdminKey)}` : '' %>">Create Endpoint</a></li>
-        </ul>
-      </nav>
+    <div class="top-bar">
+      <div class="container top-bar__content">
+        <div class="top-bar__brand">
+          <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQRxASVecEYlGmo9EtXqbRZyw565Nq6pZwrJg&s" alt="Mock API Tool logo" />
+          <span>Mock API Tool</span>
+        </div>
+        <div class="top-bar__banner">Design, mock, and test your API endpoints faster.</div>
+      </div>
+    </div>
+    <header class="site-header">
+      <div class="container">
+        <h1><%= title || 'GUI Mock API' %></h1>
+        <nav>
+          <ul>
+            <li><a href="/admin<%= layoutAdminKey ? `?key=${encodeURIComponent(layoutAdminKey)}` : '' %>">Routes</a></li>
+            <li><a class="button" href="/admin/new<%= layoutAdminKey ? `?key=${encodeURIComponent(layoutAdminKey)}` : '' %>">Create Endpoint</a></li>
+          </ul>
+        </nav>
+      </div>
     </header>
     <main class="container">
       <%- body %>
