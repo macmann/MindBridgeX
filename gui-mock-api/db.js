@@ -6,7 +6,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const dbFile = path.join(__dirname, 'data.sqlite');
-export const db = new Database(dbFile);
+const DB_FILE = process.env.DB_FILE || 'mockapis.db';
+export const db = new Database(DB_FILE);
 
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');

@@ -52,3 +52,54 @@ git push -u origin main
 - Do **not** commit `.env`. Your API keys must remain secret.
 - The sample uses the **Responses API** to request plain JavaScript code.
 - Adjust the `input` instruction in `src/index.js` for different languages or formatting (e.g., Python-only).
+
+## Deploying to Render (Web Service)
+
+This app can run on **Render Free Web Service**. On the free tier:
+
+- The filesystem is **ephemeral** (SQLite data in `mockapis.db` will be lost on redeploy or restart).
+- You **cannot attach persistent disks** on free web services.
+- For a small personal/mock tool this is usually fine; for persistent data, upgrade to a paid plan later.
+
+### Option A — Deploy via Render Dashboard (Free tier compatible)
+
+1. Push this repo to GitHub/GitLab/Bitbucket.
+2. In Render, click **New → Web Service**, connect your repo.
+3. Choose environment: **Node**.
+4. Set:
+   - **Build Command:** `npm install`
+   - **Start Command:** `node server.js`
+5. Under **Environment → Environment Variables**, add:
+   - `ADMIN_KEY` = your-secret-admin-key  
+   - `NODE_ENV=production`
+   - (optional) `DB_FILE=mockapis.db`  # default; kept for clarity
+6. Click **Create Web Service** and wait for deploy.
+
+Your URLs will look like:
+
+- Admin UI: `https://<your-service>.onrender.com/admin?key=<ADMIN_KEY>`
+- Mock API base: `https://<your-service>.onrender.com`
+
+> ⚠ On the free tier, any endpoints and variables you create are stored in the local SQLite file. When the service redeploys or restarts, that file can be reset and you will lose data.
+
+### Option B — Deploy Using render.yaml (No disk, free-tier safe)
+
+If you want infrastructure-as-code and your account allows Blueprints, create a file named **render.yaml** at the project root:
+
+```yaml
+services:
+  - type: web
+    name: gui-mock-api
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ADMIN_KEY
+        generateValue: true
+      # Optional: DB_FILE override (still ephemeral on free tier)
+      - key: DB_FILE
+        value: mockapis.db
