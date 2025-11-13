@@ -2,6 +2,7 @@
   "name": "gui-mock-api",
   "version": "1.0.0",
   "description": "Mock API generator GUI server",
+  "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
