@@ -6,12 +6,13 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
   </head>
   <body>
+    <% const layoutAdminKey = typeof adminKey !== 'undefined' ? adminKey : null; %>
     <header class="container">
       <h1><%= title || 'GUI Mock API' %></h1>
       <nav>
         <ul>
-          <li><a href="/admin<%= adminKey ? `?key=${encodeURIComponent(adminKey)}` : '' %>">Routes</a></li>
-          <li><a href="/admin/new<%= adminKey ? `?key=${encodeURIComponent(adminKey)}` : '' %>">Create Endpoint</a></li>
+          <li><a href="/admin<%= layoutAdminKey ? `?key=${encodeURIComponent(layoutAdminKey)}` : '' %>">Routes</a></li>
+          <li><a href="/admin/new<%= layoutAdminKey ? `?key=${encodeURIComponent(layoutAdminKey)}` : '' %>">Create Endpoint</a></li>
         </ul>
       </nav>
     </header>
