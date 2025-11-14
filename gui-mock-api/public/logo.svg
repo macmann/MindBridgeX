@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-labelledby="title desc">
+  <title id="title">Mock API Tool logo</title>
+  <desc id="desc">Interlocking braces forming an abstract API icon.</desc>
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0d6efd" />
+      <stop offset="100%" stop-color="#6610f2" />
+    </linearGradient>
+  </defs>
+  <rect width="120" height="120" rx="24" fill="url(#grad)" />
+  <g fill="#ffffff">
+    <path d="M38 40a8 8 0 0 1 8-8h10v12h-7a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h7v12H46a8 8 0 0 1-8-8V40z" opacity="0.9" />
+    <path d="M82 40a8 8 0 0 0-8-8H64v12h7a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3h-7v12h10a8 8 0 0 0 8-8V40z" opacity="0.9" />
+    <rect x="52" y="36" width="16" height="48" rx="6" opacity="0.75" />
+  </g>
+</svg>
