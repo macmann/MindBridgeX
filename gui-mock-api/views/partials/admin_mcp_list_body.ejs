@@ -54,6 +54,7 @@
         <td><%= s.is_enabled ? 'Yes' : 'No' %></td>
         <td class="right">
           <div class="action-buttons">
+            <a class="button button-outline" href="/admin/mcp/<%= s.id %>/info?key=<%= encodeURIComponent(query?.key || '') %>">Info</a>
             <a class="button button-outline" href="/admin/mcp/<%= s.id %>?key=<%= encodeURIComponent(query?.key || '') %>">Edit</a>
             <a class="button button-outline" href="/admin/mcp/<%= s.id %>/tools?key=<%= encodeURIComponent(query?.key || '') %>">Tools</a>
             <form method="post" action="/admin/mcp/<%= s.id %>/start?key=<%= encodeURIComponent(query?.key || '') %>">

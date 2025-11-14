@@ -43,6 +43,7 @@
   </form>
 
   <p style="margin-top:1rem;">
+    <a href="/admin/mcp/<%= s.id %>/info?key=<%= encodeURIComponent(query?.key || '') %>">View connection info →</a><br/>
     <a href="/admin/mcp/<%= s.id %>/tools?key=<%= encodeURIComponent(query?.key || '') %>">Manage tools for this server →</a>
   </p>
 <% } %>

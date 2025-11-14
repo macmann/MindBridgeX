@@ -1,0 +1,84 @@
+<h2>MCP connection details for <%= s.name %></h2>
+<p class="muted">Provide this information to trusted third parties that need to integrate with this MCP server.</p>
+
+<section>
+  <h3>HTTP base configuration</h3>
+  <% if (baseUrl) { %>
+    <p>
+      <strong>Base URL:</strong>
+      <code><%= baseUrl %></code>
+      <% if (baseUrlSource === 'derived') { %>
+        <br/><span class="muted">Derived from the current request. Update the MCP server settings to lock this value.</span>
+      <% } else if (baseUrlSource === 'configured') { %>
+        <br/><span class="muted">Configured in the MCP server settings.</span>
+      <% } %>
+    </p>
+  <% } else { %>
+    <div class="flash flash-error">No base URL is configured yet. Update the MCP server before sharing.</div>
+  <% } %>
+
+  <% if (hasAuth) { %>
+    <p>
+      <strong>Authentication header:</strong>
+      <code><%= authHeader %>: <%= authValue %></code>
+    </p>
+  <% } else { %>
+    <p class="muted">No API key header is configured. Requests can be sent without additional authentication.</p>
+  <% } %>
+</section>
+
+<section>
+  <h3>Available tools</h3>
+  <% if ((tools || []).length === 0) { %>
+    <p class="muted">No MCP tools have been added yet. Create at least one tool to expose mock endpoints.</p>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>Tool name</th>
+          <th>HTTP method</th>
+          <th>Endpoint path</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (const t of tools) { %>
+          <tr>
+            <td><code><%= t.name %></code></td>
+            <td><code><%= String(t.method || '').toUpperCase() %></code></td>
+            <td><code><%= (t.path || '').replace(/:([A-Za-z0-9_]+)/g, '<$1>') %></code></td>
+            <td><%= t.description || '' %></td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  <% } %>
+</section>
+
+<section>
+  <h3>Quick start examples</h3>
+  <p class="muted">Use these snippets as a starting point for local testing.</p>
+  <article>
+    <header><strong>Run the MCP bridge</strong></header>
+    <pre><code><%= connectionCommand %></code></pre>
+  </article>
+  <% if (curlExample) { %>
+    <article>
+      <header><strong>Sample HTTP call</strong></header>
+      <pre><code><%= curlExample %></code></pre>
+    </article>
+  <% } %>
+</section>
+
+<section>
+  <h3>Shareable JSON summary</h3>
+  <p class="muted">Includes the minimum fields a client needs to connect.</p>
+  <pre><code><%- JSON.stringify(infoPayload, null, 2) %></code></pre>
+</section>
+
+<p style="margin-top:1.5rem;">
+  <a class="button secondary" href="/admin/mcp?key=<%= encodeURIComponent(query?.key || '') %>">← Back to MCP servers</a>
+  <% if (s.id) { %>
+    <a class="button" href="/admin/mcp/<%= s.id %>/tools?key=<%= encodeURIComponent(query?.key || '') %>">Manage tools</a>
+  <% } %>
+</p>

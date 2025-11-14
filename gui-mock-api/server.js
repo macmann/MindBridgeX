@@ -697,6 +697,84 @@ app.get('/admin/mcp/:id', requireAdmin, (req, res) => {
   res.render('admin_mcp_edit', { s, query: req.query });
 });
 
+app.get('/admin/mcp/:id/info', requireAdmin, (req, res) => {
+  const s = getMcpServer(req.params.id);
+  if (!s) return res.status(404).send('MCP server not found');
+
+  const tools = listMcpToolsWithEndpoints(s.id);
+
+  const storedBaseUrl = typeof s.base_url === 'string' ? s.base_url.trim() : '';
+  const sanitizedBaseUrl = storedBaseUrl ? storedBaseUrl.replace(/\/+$/, '') : '';
+  const hostHeader = req.get('host');
+  let derivedBaseUrl = '';
+  if (hostHeader) {
+    derivedBaseUrl = `${req.protocol}://${hostHeader}`;
+  }
+  const baseUrl = sanitizedBaseUrl || derivedBaseUrl;
+  const baseUrlSource = sanitizedBaseUrl ? 'configured' : derivedBaseUrl ? 'derived' : 'none';
+
+  const authHeader = (s.api_key_header || '').trim();
+  const authValue = (s.api_key_value || '').trim();
+  const hasAuth = Boolean(authHeader && authValue);
+
+  let curlExample = null;
+  const firstTool = tools[0];
+  if (firstTool && baseUrl) {
+    const method = String(firstTool.method || 'GET').toUpperCase();
+    const placeholderPath = String(firstTool.path || '/').replace(/:([A-Za-z0-9_]+)/g, '<$1>');
+    let curlUrl;
+    try {
+      curlUrl = new URL(placeholderPath, baseUrl).toString();
+    } catch (err) {
+      curlUrl = `${baseUrl}${placeholderPath.startsWith('/') ? '' : '/'}${placeholderPath}`;
+    }
+    const curlLines = [`curl -X ${method} '${curlUrl}'`];
+    if (hasAuth) {
+      curlLines.push(`  -H '${authHeader}: ${authValue}'`);
+    }
+    if (['POST', 'PUT', 'PATCH'].includes(method)) {
+      curlLines.push("  -H 'Content-Type: application/json'");
+      curlLines.push("  -d '{\"example\":\"value\"}'");
+    }
+    curlExample = curlLines.join(' \\\n');
+  }
+
+  const infoPayload = {
+    id: s.id,
+    name: s.name,
+    baseUrl,
+    tools: tools.map((t) => ({
+      name: t.name,
+      method: String(t.method || '').toUpperCase(),
+      path: t.path
+    }))
+  };
+  if (hasAuth) {
+    infoPayload.authentication = { header: authHeader, value: authValue };
+  }
+
+  const connectionCommandParts = [`MCP_SERVER_ID=${s.id}`];
+  if (baseUrl) {
+    connectionCommandParts.push(`MOCK_BASE_URL=${baseUrl}`);
+  }
+  connectionCommandParts.push('node mcp-server.js');
+  const connectionCommand = connectionCommandParts.join(' ');
+
+  res.render('admin_mcp_info', {
+    s,
+    tools,
+    query: req.query,
+    baseUrl,
+    baseUrlSource,
+    hasAuth,
+    authHeader,
+    authValue,
+    curlExample,
+    connectionCommand,
+    infoPayload
+  });
+});
+
 // Save MCP server
 app.post('/admin/mcp/save', requireAdmin, (req, res) => {
   const body = req.body;

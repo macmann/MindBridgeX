@@ -1,0 +1,17 @@
+<%
+  const title = `MCP Server Info · ${s.name}`;
+  const body = include('partials/admin_mcp_info_body', {
+    s,
+    tools,
+    query,
+    baseUrl,
+    baseUrlSource,
+    hasAuth,
+    authHeader,
+    authValue,
+    curlExample,
+    connectionCommand,
+    infoPayload,
+  });
+%>
+<%- include('layout', { title, body, adminKey: query?.key }) %>
