@@ -5,7 +5,7 @@
   "type": "module",
   "main": "src/index.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node index.js",
     "generate": "node src/index.js",
     "mcp-server": "node mcp-server.js"
   },
