@@ -1,4 +1,4 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import {
@@ -21,7 +21,7 @@ if (!mcpServerConfig || !mcpServerConfig.is_enabled) {
 const toolsConfig = listMcpToolsWithEndpoints(MCP_SERVER_ID);
 const BASE_URL = process.env.MOCK_BASE_URL || mcpServerConfig.base_url || 'http://localhost:3000';
 
-const server = new Server(
+const server = new McpServer(
   {
     name: mcpServerConfig.name || 'mock-api-mcp',
     version: '0.1.0'
@@ -50,20 +50,27 @@ function buildPath(pathTemplate, args) {
 
 // Register tools
 for (const t of toolsConfig) {
-  let inputSchema;
+  let inputJsonSchema;
   try {
-    inputSchema = JSON.parse(t.arg_schema || '{"type":"object","properties":{},"required":[]}');
+    inputJsonSchema = JSON.parse(t.arg_schema || '{"type":"object","properties":{},"required":[]}');
   } catch {
-    inputSchema = { type: 'object', properties: {}, required: [] };
+    inputJsonSchema = { type: 'object', properties: {}, required: [] };
   }
 
   const zodSchema = z.any(); // keep simple; skip strict validation for now
 
-  server.tool(
+  server.registerTool(
     t.name,
-    zodSchema,
-    async (input) => {
-      const args = input ?? {};
+    {
+      description: t.description || `Proxy for ${t.method} ${t.path}`,
+      inputSchema: zodSchema,
+      _meta: { inputJsonSchema }
+    },
+    async (inputArgs = {}) => {
+      const args =
+        inputArgs && typeof inputArgs === 'object' && !Array.isArray(inputArgs)
+          ? inputArgs
+          : {};
       const { path, usedKeys } = buildPath(t.path, args);
 
       // Build query from remaining args
@@ -119,10 +126,6 @@ for (const t of toolsConfig) {
           }
         ]
       };
-    },
-    {
-      description: t.description || `Proxy for ${t.method} ${t.path}`,
-      inputSchema
     }
   );
 }
