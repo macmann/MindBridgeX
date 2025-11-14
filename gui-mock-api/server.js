@@ -94,6 +94,208 @@ function extractPathParams(pathPattern) {
   return matches.map((token) => token.slice(1));
 }
 
+function parseJsonSafe(value, fallback) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  try {
+    return JSON.parse(trimmed);
+  } catch (err) {
+    return fallback;
+  }
+}
+
+function parseJsonObject(value) {
+  const parsed = parseJsonSafe(value, {});
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+}
+
+function convertPathToOpenApi(pathPattern) {
+  if (typeof pathPattern !== 'string' || !pathPattern.trim()) {
+    return '/';
+  }
+  const normalized = pathPattern.startsWith('/') ? pathPattern : `/${pathPattern}`;
+  return normalized.replace(/:([A-Za-z0-9_]+)/g, '{$1}');
+}
+
+function inferSchemaFromExample(example) {
+  if (Array.isArray(example)) {
+    const firstItem = example.length > 0 ? inferSchemaFromExample(example[0]) : {};
+    return {
+      type: 'array',
+      items: firstItem
+    };
+  }
+
+  if (example === null) {
+    return {
+      type: 'string',
+      nullable: true
+    };
+  }
+
+  const valueType = typeof example;
+  if (valueType === 'object') {
+    const properties = {};
+    for (const [key, value] of Object.entries(example)) {
+      properties[key] = inferSchemaFromExample(value);
+    }
+    return {
+      type: 'object',
+      properties
+    };
+  }
+
+  if (valueType === 'number') {
+    return {
+      type: Number.isInteger(example) ? 'integer' : 'number'
+    };
+  }
+
+  if (valueType === 'boolean') {
+    return { type: 'boolean' };
+  }
+
+  return { type: 'string' };
+}
+
+function buildOpenApiDocument(endpoint, req) {
+  const pathParams = extractPathParams(endpoint.path);
+  const matchHeaders = parseJsonObject(endpoint.match_headers);
+  const responseHeaders = parseJsonObject(endpoint.response_headers);
+  let declaredContentType = '';
+
+  for (const [headerName, headerValue] of Object.entries(responseHeaders)) {
+    if (headerName.toLowerCase() === 'content-type') {
+      declaredContentType = String(headerValue || '').trim();
+      break;
+    }
+  }
+
+  const parameters = [];
+
+  for (const paramName of pathParams) {
+    parameters.push({
+      name: paramName,
+      in: 'path',
+      required: true,
+      schema: { type: 'string' },
+      description: `Path parameter ${paramName}`
+    });
+  }
+
+  for (const [headerName, headerValue] of Object.entries(matchHeaders)) {
+    parameters.push({
+      name: headerName,
+      in: 'header',
+      required: true,
+      schema: { type: 'string', example: headerValue },
+      description: 'Required request header'
+    });
+  }
+
+  const baseUrl = `${req.protocol}://${req.get('host') || 'localhost'}`;
+
+  let responseContentType = declaredContentType;
+  let responseExample = endpoint.response_body ?? '';
+  let responseSchema = { type: 'string' };
+
+  if (endpoint.response_is_json) {
+    const parsedBody = parseJsonSafe(endpoint.response_body, null);
+    if (parsedBody !== null && typeof parsedBody !== 'undefined') {
+      responseExample = parsedBody;
+      responseSchema = inferSchemaFromExample(parsedBody);
+      if (!responseContentType) {
+        responseContentType = 'application/json';
+      }
+    } else {
+      responseContentType = responseContentType || 'text/plain';
+      responseSchema = { type: 'string' };
+      responseExample = endpoint.response_body ?? '';
+    }
+  } else {
+    responseContentType = responseContentType || 'text/plain';
+    responseSchema = { type: 'string' };
+    responseExample = endpoint.response_body ?? '';
+  }
+
+  if (!responseContentType) {
+    responseContentType = 'text/plain';
+  }
+
+  const responseContent = {
+    [responseContentType]: {
+      schema: responseSchema,
+      example: responseExample
+    }
+  };
+
+  const responseHeadersSpec = {};
+  for (const [headerName, headerValue] of Object.entries(responseHeaders)) {
+    responseHeadersSpec[headerName] = {
+      schema: { type: 'string' },
+      example: headerValue
+    };
+  }
+
+  const response = {
+    description: endpoint.description || `Mock response for ${endpoint.path}`,
+    content: responseContent
+  };
+
+  if (Object.keys(responseHeadersSpec).length > 0) {
+    response.headers = responseHeadersSpec;
+  }
+
+  const method = String(endpoint.method || 'get').toLowerCase();
+  const operation = {
+    summary: endpoint.name || endpoint.path,
+    operationId: endpoint.id,
+    responses: {
+      [String(endpoint.response_status || 200)]: response
+    }
+  };
+
+  if (endpoint.description) {
+    operation.description = endpoint.description;
+  }
+
+  if (parameters.length > 0) {
+    operation.parameters = parameters;
+  }
+
+  operation['x-mock-api-enabled'] = Boolean(endpoint.enabled);
+
+  const openApiPath = convertPathToOpenApi(endpoint.path);
+
+  const info = {
+    title: endpoint.name || endpoint.id || 'Mock Endpoint',
+    version: '1.0.0'
+  };
+
+  if (endpoint.description) {
+    info.description = endpoint.description;
+  }
+
+  return {
+    openapi: '3.0.3',
+    info,
+    servers: [{ url: baseUrl }],
+    paths: {
+      [openApiPath]: {
+        [method]: operation
+      }
+    }
+  };
+}
+
 app.get('/', (req, res) => {
   res.redirect('/admin');
 });
@@ -358,6 +560,16 @@ app.post('/admin/:id/vars/delete', requireAdmin, (req, res) => {
   }
   const search = params.toString();
   res.redirect(`/admin/${e.id}/vars${search ? `?${search}` : ''}`);
+});
+
+app.get('/admin/:id/openapi', requireAdmin, (req, res) => {
+  const endpoint = getEndpoint(req.params.id);
+  if (!endpoint) {
+    return res.status(404).send('Not found');
+  }
+
+  const document = buildOpenApiDocument(endpoint, req);
+  res.type('application/json').send(`${JSON.stringify(document, null, 2)}\n`);
 });
 
 // Logs
