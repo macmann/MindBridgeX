@@ -6,7 +6,8 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node server.js",
-    "generate": "node src/index.js"
+    "generate": "node src/index.js",
+    "mcp-server": "node mcp-server.js"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -24,6 +25,8 @@
     "morgan": "^1.10.0",
     "nanoid": "^4.0.2",
     "openai": "^4.0.0",
+    "@modelcontextprotocol/sdk": "*",
+    "zod": "^3.23.8",
     "yup": "^1.4.0"
   }
 }
