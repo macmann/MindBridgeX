@@ -26,29 +26,11 @@
         <td><strong><%= s.name %></strong><br/><span class="muted"><%= s.description || '' %></span></td>
         <td><code><%= s.base_url || '' %></code></td>
         <td>
-          <% const status = statuses && statuses[s.id] ? statuses[s.id] : { state: 'idle' }; %>
-          <% if (status.state === 'running') { %>
-            <strong>Running</strong>
-          <% } else if (status.state === 'stopping') { %>
-            <strong>Stopping</strong>
-          <% } else if (status.state === 'stopped') { %>
-            <strong>Stopped</strong>
-          <% } else if (status.state === 'error') { %>
-            <strong>Error</strong>
+          <% const status = statuses && statuses[s.id] ? statuses[s.id] : { state: 'disabled' }; %>
+          <% if (status.state === 'enabled') { %>
+            <strong>Enabled</strong><br/><span class="muted">Mounted at /mcp</span>
           <% } else { %>
-            <strong>Not running</strong>
-          <% } %>
-          <% if (status.pid) { %>
-            <br/><span class="muted">PID <%= status.pid %></span>
-          <% } %>
-          <% if (typeof status.exitCode !== 'undefined' && status.exitCode !== null) { %>
-            <br/><span class="muted">Exit code <%= status.exitCode %></span>
-          <% } %>
-          <% if (status.signal) { %>
-            <br/><span class="muted">Signal <%= status.signal %></span>
-          <% } %>
-          <% if (status.error) { %>
-            <br/><span class="muted">Error: <%= status.error %></span>
+            <strong>Disabled</strong>
           <% } %>
         </td>
         <td><%= s.is_enabled ? 'Yes' : 'No' %></td>
@@ -58,10 +40,10 @@
             <a class="button button-outline" href="/admin/mcp/<%= s.id %>?key=<%= encodeURIComponent(query?.key || '') %>">Edit</a>
             <a class="button button-outline" href="/admin/mcp/<%= s.id %>/tools?key=<%= encodeURIComponent(query?.key || '') %>">Tools</a>
             <form method="post" action="/admin/mcp/<%= s.id %>/start?key=<%= encodeURIComponent(query?.key || '') %>">
-              <button class="button button-outline" type="submit" <%= (!s.is_enabled || status.state === 'running' || status.state === 'stopping') ? 'disabled' : '' %>>Start</button>
+              <button class="button button-outline" type="submit" <%= s.is_enabled ? 'disabled' : '' %>>Enable</button>
             </form>
             <form method="post" action="/admin/mcp/<%= s.id %>/stop?key=<%= encodeURIComponent(query?.key || '') %>">
-              <button class="button button-outline contrast" type="submit" <%= (status.state !== 'running' && status.state !== 'stopping') ? 'disabled' : '' %>>Stop</button>
+              <button class="button button-outline contrast" type="submit" <%= s.is_enabled ? '' : 'disabled' %>>Disable</button>
             </form>
           </div>
         </td>

@@ -240,6 +240,19 @@ export function deleteMcpServer(id) {
   db.prepare('DELETE FROM mcp_servers WHERE id = ?').run(id);
 }
 
+export function setMcpServerEnabled(id, enabled) {
+  if (!id) {
+    throw new Error('MCP server id is required');
+  }
+
+  const now = new Date().toISOString();
+  db.prepare(
+    'UPDATE mcp_servers SET is_enabled = ?, updated_at = ? WHERE id = ?'
+  ).run(enabled ? 1 : 0, now, id);
+
+  return getMcpServer(id);
+}
+
 export function listMcpTools(mcpServerId) {
   return db.prepare('SELECT * FROM mcp_tools WHERE mcp_server_id = ? ORDER BY created_at DESC').all(mcpServerId);
 }

@@ -26,13 +26,9 @@ import {
   listMcpTools,
   listMcpToolsWithEndpoints,
   upsertMcpTool,
-  deleteMcpTool
+  deleteMcpTool,
+  setMcpServerEnabled
 } from './db.js';
-import {
-  getMcpServerRuntimeStatus,
-  startMcpServerRuntime,
-  stopMcpServerRuntime
-} from './mcp-process-manager.js';
 import { mountMcp } from '../mcp-server.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -64,6 +60,7 @@ if (isMcpEnabled) {
       mockBaseUrl: mockBaseUrl || undefined,
       basePath: '/mcp'
     });
+    console.log('[MCP] Enabled through Express router at /mcp');
   } catch (err) {
     console.error('[MCP] Failed to mount MCP router:', err?.message || err);
   }
@@ -651,14 +648,14 @@ function buildMcpListFlash(query, servers) {
   const serverName = servers.find((s) => s.id === serverId)?.name || serverId || 'MCP server';
 
   switch (status) {
-    case 'started':
-      return { message: `Started MCP server "${serverName}".`, type: 'success' };
-    case 'stopped':
-      return { message: `Sent stop signal to MCP server "${serverName}".`, type: 'success' };
-    case 'already-running':
-      return { message: `MCP server "${serverName}" is already running.`, type: 'info' };
-    case 'not-running':
-      return { message: `MCP server "${serverName}" is not currently running.`, type: 'info' };
+    case 'enabled':
+      return { message: `Enabled MCP server "${serverName}".`, type: 'success' };
+    case 'disabled':
+      return { message: `Disabled MCP server "${serverName}".`, type: 'success' };
+    case 'already-enabled':
+      return { message: `MCP server "${serverName}" is already enabled.`, type: 'info' };
+    case 'already-disabled':
+      return { message: `MCP server "${serverName}" is already disabled.`, type: 'info' };
     case 'error': {
       const detail = query.message ? String(query.message) : 'An unexpected error occurred.';
       return {
@@ -679,7 +676,7 @@ app.get('/admin/mcp', requireAdmin, (req, res) => {
   }));
   const statuses = {};
   for (const server of servers) {
-    statuses[server.id] = getMcpServerRuntimeStatus(server.id);
+    statuses[server.id] = { state: server.is_enabled ? 'enabled' : 'disabled' };
   }
 
   const { message: statusMessage, type: statusType } = buildMcpListFlash(req.query, servers);
@@ -847,22 +844,13 @@ app.post('/admin/mcp/:id/start', requireAdmin, (req, res) => {
     );
   }
 
-  if (!serverRecord.is_enabled) {
-    return res.redirect(
-      buildAdminRedirect('/admin/mcp', req, res, {
-        status: 'error',
-        server: serverRecord.id,
-        message: 'Server is disabled.'
-      })
-    );
-  }
-
   try {
-    const result = startMcpServerRuntime(serverRecord);
-    if (result.alreadyRunning) {
+    const wasEnabled = Boolean(serverRecord.is_enabled);
+    setMcpServerEnabled(serverRecord.id, true);
+    if (wasEnabled) {
       return res.redirect(
         buildAdminRedirect('/admin/mcp', req, res, {
-          status: 'already-running',
+          status: 'already-enabled',
           server: serverRecord.id
         })
       );
@@ -870,17 +858,17 @@ app.post('/admin/mcp/:id/start', requireAdmin, (req, res) => {
 
     return res.redirect(
       buildAdminRedirect('/admin/mcp', req, res, {
-        status: 'started',
+        status: 'enabled',
         server: serverRecord.id
       })
     );
   } catch (err) {
-    console.error('Failed to start MCP server runtime', err);
+    console.error('Failed to enable MCP server', err);
     return res.redirect(
       buildAdminRedirect('/admin/mcp', req, res, {
         status: 'error',
         server: serverRecord.id,
-        message: err?.message || 'Failed to start MCP server.'
+        message: err?.message || 'Failed to enable MCP server.'
       })
     );
   }
@@ -899,21 +887,12 @@ app.post('/admin/mcp/:id/stop', requireAdmin, (req, res) => {
   }
 
   try {
-    const result = stopMcpServerRuntime(serverRecord.id);
-    if (result.code === 'signal-failed') {
+    const wasEnabled = Boolean(serverRecord.is_enabled);
+    setMcpServerEnabled(serverRecord.id, false);
+    if (!wasEnabled) {
       return res.redirect(
         buildAdminRedirect('/admin/mcp', req, res, {
-          status: 'error',
-          server: serverRecord.id,
-          message: 'Unable to send stop signal.'
-        })
-      );
-    }
-
-    if (result.code === 'not-running' || result.code === 'not-found') {
-      return res.redirect(
-        buildAdminRedirect('/admin/mcp', req, res, {
-          status: 'not-running',
+          status: 'already-disabled',
           server: serverRecord.id
         })
       );
@@ -921,17 +900,17 @@ app.post('/admin/mcp/:id/stop', requireAdmin, (req, res) => {
 
     return res.redirect(
       buildAdminRedirect('/admin/mcp', req, res, {
-        status: 'stopped',
+        status: 'disabled',
         server: serverRecord.id
       })
     );
   } catch (err) {
-    console.error('Failed to stop MCP server runtime', err);
+    console.error('Failed to disable MCP server', err);
     return res.redirect(
       buildAdminRedirect('/admin/mcp', req, res, {
         status: 'error',
         server: serverRecord.id,
-        message: err?.message || 'Failed to stop MCP server.'
+        message: err?.message || 'Failed to disable MCP server.'
       })
     );
   }
