@@ -3,7 +3,6 @@ import express from 'express';
 import morgan from 'morgan';
 import helmet from 'helmet';
 import compression from 'compression';
-import bodyParser from 'body-parser';
 import createError from 'http-errors';
 import { fileURLToPath } from 'url';
 import { nanoid } from 'nanoid';
@@ -37,7 +36,108 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const ADMIN_KEY = process.env.ADMIN_KEY || process.env.ADMIN_TOKEN || process.env.ADMIN_SECRET || '';
 
+function truncateHeadersForLog(headers = {}) {
+  const out = {};
+  for (const key in headers) {
+    if (!Object.prototype.hasOwnProperty.call(headers, key)) continue;
+    let value = String(headers[key]);
+    if (value.length > 200) {
+      value = `${value.slice(0, 200)}...[truncated]`;
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
+function previewPayloadForLog(payload) {
+  if (payload === undefined) return '[undefined]';
+  if (payload === null) return 'null';
+  if (typeof payload === 'string') {
+    return payload.length > 300 ? `${payload.slice(0, 300)}...[truncated]` : payload;
+  }
+  try {
+    const serialized = JSON.stringify(payload);
+    return serialized.length > 300 ? `${serialized.slice(0, 300)}...[truncated]` : serialized;
+  } catch (err) {
+    return `[unserializable payload: ${err?.message || err}]`;
+  }
+}
+
 const mcpMountRouter = express.Router();
+
+app.use('/mcp', (req, res, next) => {
+  const origEnd = res.end;
+  res.end = function (...args) {
+    console.log('[MCP] Response end', {
+      time: new Date().toISOString(),
+      status: res.statusCode
+    });
+    return origEnd.apply(this, args);
+  };
+  next();
+});
+
+app.use(
+  express.json({
+    limit: '1mb',
+    verify: (req, res, buf) => {
+      if (req.originalUrl?.startsWith('/mcp')) {
+        req.rawBody = buf && buf.length > 0 ? buf.toString('utf8') : '[empty body]';
+      }
+    }
+  })
+);
+
+app.use('/mcp', (err, req, res, next) => {
+  if (!err) {
+    return next();
+  }
+
+  const logTime = new Date().toISOString();
+  console.error('[MCP] Handler error', {
+    time: logTime,
+    error: err?.stack || String(err)
+  });
+
+  if (!req.__mcpLogged) {
+    const bodyForLog =
+      typeof req.rawBody === 'string'
+        ? req.rawBody
+        : previewPayloadForLog(req.body ?? '[empty body]');
+    console.log('[MCP] Incoming request', {
+      time: logTime,
+      method: req.method,
+      url: req.originalUrl,
+      headers: truncateHeadersForLog(req.headers || {}),
+      body: bodyForLog
+    });
+    req.__mcpLogged = true;
+  }
+
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  const errorResponse = {
+    jsonrpc: '2.0',
+    id: null,
+    error: {
+      code: -32700,
+      message: 'Parse error: Invalid JSON body'
+    }
+  };
+
+  const preview = previewPayloadForLog(errorResponse);
+  res.status(400).json(errorResponse);
+  console.log('[MCP] Response sent', {
+    time: new Date().toISOString(),
+    status: 400,
+    resultPreview: preview
+  });
+});
+
+app.use(express.urlencoded({ extended: false }));
+
 app.use('/mcp', mcpMountRouter);
 
 function clearRouterStack(router) {
@@ -82,8 +182,6 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(helmet());
 app.use(compression());
 app.use(morgan('dev'));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: false }));
 app.use('/public', express.static(path.join(__dirname, 'public')));
 
 refreshMountedMcpRouters();

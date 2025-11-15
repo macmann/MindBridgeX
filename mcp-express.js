@@ -1,137 +1,16 @@
 import express from 'express';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { z } from 'zod';
 import {
   getMcpServer,
   listMcpToolsWithEndpoints
 } from './gui-mock-api/db.js';
 
-function buildPath(pathTemplate, args) {
-  let path = pathTemplate;
-  const usedKeys = new Set();
-  if (!args) return { path, usedKeys };
-  for (const [k, v] of Object.entries(args)) {
-    const token = `:${k}`;
-    if (typeof path === 'string' && path.includes(token)) {
-      path = path.replace(token, encodeURIComponent(String(v)));
-      usedKeys.add(k);
-    }
-  }
-  return { path, usedKeys };
-}
-
-function createMcpServer({ serverId, mockBaseUrl }) {
-  const mcpServerConfig = getMcpServer(serverId);
-  if (!mcpServerConfig || !mcpServerConfig.is_enabled) {
-    throw new Error(`MCP server not found or not enabled: ${serverId}`);
-  }
-
-  const toolsConfig = listMcpToolsWithEndpoints(serverId);
-  const resolvedMockBaseUrl =
-    mockBaseUrl ||
-    process.env.MOCK_BASE_URL ||
-    mcpServerConfig.base_url ||
-    'http://localhost:3000';
-
-  const server = new McpServer(
-    {
-      name: mcpServerConfig.name || 'mock-api-mcp',
-      version: '0.1.0'
-    },
-    {
-      capabilities: {
-        tools: {}
-      }
-    }
-  );
-
-  for (const t of toolsConfig) {
-    let inputJsonSchema;
-    try {
-      inputJsonSchema = JSON.parse(
-        t.arg_schema || '{"type":"object","properties":{},"required":[]}'
-      );
-    } catch {
-      inputJsonSchema = { type: 'object', properties: {}, required: [] };
-    }
-
-    const zodSchema = z.any();
-
-    server.registerTool(
-      t.name,
-      {
-        description: t.description || `Proxy for ${t.method} ${t.path}`,
-        inputSchema: zodSchema,
-        _meta: { inputJsonSchema }
-      },
-      async (inputArgs = {}) => {
-        const args =
-          inputArgs && typeof inputArgs === 'object' && !Array.isArray(inputArgs)
-            ? inputArgs
-            : {};
-        const { path, usedKeys } = buildPath(t.path, args);
-
-        const queryParams = new URLSearchParams();
-        for (const [k, v] of Object.entries(args)) {
-          if (usedKeys.has(k)) continue;
-          if (v === undefined || v === null) continue;
-          queryParams.append(k, String(v));
-        }
-
-        const url = new URL(path, resolvedMockBaseUrl);
-        if ([...queryParams.keys()].length > 0) {
-          url.search = queryParams.toString();
-        }
-
-        const method = (t.method || 'GET').toUpperCase();
-        const headers = { 'Content-Type': 'application/json' };
-        if (mcpServerConfig.api_key_header && mcpServerConfig.api_key_value) {
-          headers[mcpServerConfig.api_key_header] =
-            mcpServerConfig.api_key_value;
-        }
-
-        let body;
-        if (['POST', 'PUT', 'PATCH'].includes(method)) {
-          body = JSON.stringify(args);
-        }
-
-        const res = await fetch(url.toString(), {
-          method,
-          headers,
-          body
-        });
-
-        const text = await res.text();
-        let parsed;
-        try {
-          parsed = JSON.parse(text);
-        } catch {
-          parsed = text;
-        }
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(
-                {
-                  status: res.status,
-                  url: url.toString(),
-                  data: parsed
-                },
-                null,
-                2
-              )
-            }
-          ]
-        };
-      }
-    );
-  }
-
-  return { server, resolvedMockBaseUrl };
-}
+const DEFAULT_PROTOCOL_VERSION = '2025-06-18';
+const DEFAULT_INPUT_SCHEMA = {
+  type: 'object',
+  properties: {},
+  required: [],
+  additionalProperties: true
+};
 
 function truncateHeaders(headers) {
   const out = {};
@@ -161,90 +40,278 @@ function previewPayload(x) {
   return s;
 }
 
+function parseToolInputSchema(rawSchema) {
+  if (!rawSchema || typeof rawSchema !== 'string') {
+    return { ...DEFAULT_INPUT_SCHEMA };
+  }
+
+  try {
+    const parsed = JSON.parse(rawSchema);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { ...DEFAULT_INPUT_SCHEMA };
+    }
+
+    const normalized = { ...DEFAULT_INPUT_SCHEMA, ...parsed };
+
+    if (
+      parsed.properties &&
+      typeof parsed.properties === 'object' &&
+      !Array.isArray(parsed.properties)
+    ) {
+      normalized.properties = parsed.properties;
+    }
+
+    if (Array.isArray(parsed.required)) {
+      normalized.required = parsed.required;
+    }
+
+    if (normalized.additionalProperties === undefined) {
+      normalized.additionalProperties = true;
+    }
+
+    return normalized;
+  } catch (err) {
+    console.warn('[MCP] Failed to parse tool schema', err);
+    return { ...DEFAULT_INPUT_SCHEMA };
+  }
+}
+
+function buildToolsList(serverId) {
+  const toolRecords = listMcpToolsWithEndpoints(serverId) || [];
+  return toolRecords.map((tool) => ({
+    name: tool.name,
+    description:
+      tool.description || `Proxy for ${(tool.method || 'GET').toUpperCase()} ${tool.path || '/'}`,
+    inputSchema: parseToolInputSchema(tool.arg_schema)
+  }));
+}
+
+function sendJson(res, status, payload) {
+  const preview = previewPayload(payload);
+  res.status(status);
+  const response = res.json(payload);
+  console.log('[MCP] Response sent', {
+    time: new Date().toISOString(),
+    status,
+    resultPreview: preview
+  });
+  return response;
+}
+
 export function createMcpRouter(options = {}) {
   const { serverId, mockBaseUrl } = options;
   if (!serverId) {
     throw new Error('MCP server ID is required to mount MCP routes');
   }
 
-  const { server, resolvedMockBaseUrl } = createMcpServer({
-    serverId,
-    mockBaseUrl
-  });
+  const serverConfig = getMcpServer(serverId);
+  if (!serverConfig || !serverConfig.is_enabled) {
+    throw new Error(`MCP server not found or not enabled: ${serverId}`);
+  }
+
+  const resolvedMockBaseUrl =
+    mockBaseUrl ||
+    process.env.MOCK_BASE_URL ||
+    serverConfig.base_url ||
+    'http://localhost:3000';
 
   const router = express.Router();
 
-  router.use(
-    express.raw({ type: '*/*', limit: '5mb' }),
-    (req, res, next) => {
-      req.rawBody = req.body;
-      next();
-    }
-  );
-
   router.use((req, res, next) => {
-    const origEnd = res.end;
-    res.end = function (...args) {
-      console.log('[MCP] Response end', {
-        time: new Date().toISOString(),
-        status: res.statusCode
-      });
-      return origEnd.apply(this, args);
-    };
+    if (typeof req.rawBody !== 'string') {
+      req.rawBody = '[empty body]';
+    }
     next();
   });
 
-  async function handleRequest(req, res, bodyOverride) {
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-      enableJsonResponse: true
+  router.get('/', (req, res) => {
+    console.log('[MCP] Health check GET /mcp');
+    return sendJson(res, 200, {
+      ok: true,
+      message: 'MCP endpoint is running (use POST with JSON-RPC 2.0)'
     });
+  });
 
-    res.on('close', () => {
-      try {
-        transport.close();
-      } catch (err) {
-        console.error('[MCP] Failed to close transport', err);
-      }
-    });
+  router.post('/', async (req, res, next) => {
+    const startedAt = new Date().toISOString();
+    const bodyForLog =
+      typeof req.rawBody === 'string'
+        ? req.rawBody
+        : previewPayload(req.body ?? '[empty body]');
 
-    await server.connect(transport);
-    await transport.handleRequest(
-      req,
-      res,
-      bodyOverride ?? req.rawBody ?? req.body
-    );
-  }
-
-  router.use(async (req, res, next) => {
-    const rawBodyBuffer = req.rawBody;
-    const rawBodyAsString =
-      rawBodyBuffer && rawBodyBuffer.length > 0
-        ? rawBodyBuffer.toString('utf8')
-        : '[empty body]';
+    req.__mcpLogged = true;
 
     console.log('[MCP] Incoming request', {
-      time: new Date().toISOString(),
+      time: startedAt,
       method: req.method,
       url: req.originalUrl,
       headers: truncateHeaders(req.headers),
-      body: rawBodyAsString
+      body: bodyForLog
     });
 
-    try {
-      const result = await handleRequest(req, res);
-      console.log('[MCP] Response sent', {
-        time: new Date().toISOString(),
-        status: res.statusCode,
-        resultPreview: previewPayload(result)
-      });
-    } catch (err) {
-      console.error('[MCP] Handler error', {
-        time: new Date().toISOString(),
-        error: err?.stack || String(err)
-      });
-      next(err);
+    const contentType = (req.headers['content-type'] || '').split(';')[0].trim();
+    if (contentType !== 'application/json') {
+      const errorResponse = {
+        jsonrpc: '2.0',
+        id: null,
+        error: {
+          code: -32700,
+          message: 'Content-Type must be application/json'
+        }
+      };
+      return sendJson(res, 415, errorResponse);
     }
+
+    const rpc = req.body && typeof req.body === 'object' ? req.body : {};
+    const { jsonrpc, id, method: rpcMethod, params } = rpc;
+    const responseId = id ?? null;
+
+    if (jsonrpc !== '2.0' || typeof rpcMethod !== 'string') {
+      const errorResponse = {
+        jsonrpc: '2.0',
+        id: responseId,
+        error: {
+          code: -32600,
+          message: 'Invalid JSON-RPC 2.0 request'
+        }
+      };
+      return sendJson(res, 400, errorResponse);
+    }
+
+    const protocolVersion =
+      typeof params?.protocolVersion === 'string'
+        ? params.protocolVersion
+        : DEFAULT_PROTOCOL_VERSION;
+
+    try {
+      switch (rpcMethod) {
+        case 'initialize': {
+          const response = {
+            jsonrpc: '2.0',
+            id: responseId,
+            result: {
+              protocolVersion,
+              serverInfo: {
+                name: serverConfig.name || 'Brillar Mock API MCP',
+                version: serverConfig.version || '0.1.0'
+              },
+              capabilities: {
+                tools: {
+                  list: true,
+                  call: false
+                }
+              }
+            }
+          };
+          return sendJson(res, 200, response);
+        }
+        case 'tools/list': {
+          const tools = buildToolsList(serverId);
+          const response = {
+            jsonrpc: '2.0',
+            id: responseId,
+            result: {
+              tools
+            }
+          };
+          return sendJson(res, 200, response);
+        }
+        default: {
+          const response = {
+            jsonrpc: '2.0',
+            id: responseId,
+            error: {
+              code: -32601,
+              message: `Method not found: ${rpcMethod}`
+            }
+          };
+          return sendJson(res, 200, response);
+        }
+      }
+    } catch (err) {
+      console.error('[MCP] Unexpected error', err);
+      const errorResponse = {
+        jsonrpc: '2.0',
+        id: responseId,
+        error: {
+          code: -32603,
+          message: 'Internal MCP server error',
+          data: {
+            message: err?.message || String(err)
+          }
+        }
+      };
+      return sendJson(res, 500, errorResponse);
+    }
+  });
+
+  router.all('/', (req, res) => {
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204);
+    }
+    const errorResponse = {
+      jsonrpc: '2.0',
+      id: null,
+      error: {
+        code: -32601,
+        message: `Unsupported method: ${req.method}`
+      }
+    };
+    return sendJson(res, 405, errorResponse);
+  });
+
+  router.use((err, req, res, next) => {
+    console.error('[MCP] Handler error', {
+      time: new Date().toISOString(),
+      error: err?.stack || String(err)
+    });
+
+    if (!req.__mcpLogged) {
+      const bodyForLog =
+        typeof req.rawBody === 'string'
+          ? req.rawBody
+          : previewPayload(req.body ?? '[empty body]');
+      console.log('[MCP] Incoming request', {
+        time: new Date().toISOString(),
+        method: req.method,
+        url: req.originalUrl,
+        headers: truncateHeaders(req.headers || {}),
+        body: bodyForLog
+      });
+      req.__mcpLogged = true;
+    }
+
+    if (res.headersSent) {
+      return next(err);
+    }
+
+    const isParseError =
+      err instanceof SyntaxError && (err.status === 400 || err.statusCode === 400);
+
+    if (isParseError) {
+      const errorResponse = {
+        jsonrpc: '2.0',
+        id: null,
+        error: {
+          code: -32700,
+          message: 'Parse error: Invalid JSON body'
+        }
+      };
+      return sendJson(res, 400, errorResponse);
+    }
+
+    const errorResponse = {
+      jsonrpc: '2.0',
+      id: null,
+      error: {
+        code: -32603,
+        message: 'Internal MCP server error',
+        data: {
+          message: err?.message || String(err)
+        }
+      }
+    };
+    return sendJson(res, 500, errorResponse);
   });
 
   console.log(
