@@ -292,7 +292,12 @@
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
-        justify-content: flex-end;
+        justify-content: flex-start;
+        align-items: stretch;
+      }
+
+      .table-actions > * {
+        flex-shrink: 0;
       }
 
       .table-actions form {
@@ -306,6 +311,8 @@
       .table-actions a.secondary {
         padding: 0.45rem 1rem;
         box-shadow: none;
+        min-width: 120px;
+        justify-content: center;
       }
 
       .form-stack {
@@ -501,6 +508,7 @@
         box-shadow: 0 1rem 2.5rem rgba(13, 110, 253, 0.25);
         transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
         text-decoration: none;
+        white-space: nowrap;
       }
 
       button:hover,
@@ -539,6 +547,7 @@
         text-decoration: none;
         box-shadow: 0 0.85rem 2rem rgba(13, 110, 253, 0.12);
         transition: background 0.15s ease, transform 0.15s ease;
+        white-space: nowrap;
       }
 
       a.secondary:hover {
@@ -622,8 +631,19 @@
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
-        justify-content: flex-end;
+        justify-content: flex-start;
         align-items: center;
+      }
+
+      .action-buttons > * {
+        flex-shrink: 0;
+      }
+
+      .action-buttons .button,
+      .action-buttons button,
+      .action-buttons a.secondary {
+        min-width: 120px;
+        justify-content: center;
       }
 
       .action-buttons form {
