@@ -359,10 +359,60 @@
         padding: 0.75rem 1rem;
         border-radius: 1rem;
         background: rgba(13, 110, 253, 0.06);
+        cursor: pointer;
+        transition: background 0.15s ease, box-shadow 0.15s ease;
+      }
+
+      label.checkbox:hover {
+        background: rgba(13, 110, 253, 0.1);
+      }
+
+      label.checkbox:has(input[type='checkbox']:checked) {
+        background: rgba(13, 110, 253, 0.15);
+        box-shadow: 0 0 0 1px rgba(13, 110, 253, 0.2);
+      }
+
+      label.checkbox span {
+        flex: 1;
       }
 
       label.checkbox input[type='checkbox'] {
-        transform: scale(1.2);
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        width: 1.25rem;
+        height: 1.25rem;
+        border-radius: 50%;
+        border: 2px solid rgba(13, 110, 253, 0.4);
+        background: #fff;
+        display: grid;
+        place-content: center;
+        cursor: pointer;
+        transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+      }
+
+      label.checkbox input[type='checkbox']::after {
+        content: '';
+        width: 0.55rem;
+        height: 0.55rem;
+        border-radius: 50%;
+        background: var(--brand-primary);
+        transform: scale(0);
+        transition: transform 0.15s ease;
+      }
+
+      label.checkbox input[type='checkbox']:checked {
+        border-color: var(--brand-primary);
+        background: rgba(13, 110, 253, 0.15);
+      }
+
+      label.checkbox input[type='checkbox']:checked::after {
+        transform: scale(1);
+      }
+
+      label.checkbox input[type='checkbox']:focus-visible {
+        outline: 3px solid rgba(13, 110, 253, 0.35);
+        outline-offset: 2px;
       }
 
       input,
