@@ -3,7 +3,9 @@
   const body = include('partials/admin_mcp_edit_body', {
     s,
     query,
-    errorMessage
+    errorMessage,
+    authConfig,
+    authSummary
   });
 %>
 <%- include('layout', { title, body, adminKey: query?.key }) %>

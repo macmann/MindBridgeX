@@ -18,6 +18,10 @@
       <div class="flash flash-error"><%= errorMessage %></div>
     <% } %>
 
+    <% if (query?.saved === 'auth') { %>
+      <div class="flash flash-success">Authentication settings updated.</div>
+    <% } %>
+
     <div class="form-grid form-grid--two">
       <label class="stack">
         <span>Name</span>
@@ -46,18 +50,6 @@
       <input name="base_url" placeholder="http://localhost:3000" value="<%= s.base_url || '' %>"/>
       <small class="muted">If left blank, we’ll fall back to the current request origin.</small>
     </label>
-
-    <div class="form-grid form-grid--two">
-      <label class="stack">
-        <span>API Key Header (optional)</span>
-        <input name="api_key_header" placeholder="x-api-key" value="<%= s.api_key_header || '' %>"/>
-      </label>
-
-      <label class="stack">
-        <span>API Key Value (optional)</span>
-        <input name="api_key_value" placeholder="secret" value="<%= s.api_key_value || '' %>"/>
-      </label>
-    </div>
 
     <label class="checkbox" for="<%= enableToggleId %>">
       <input id="<%= enableToggleId %>" type="checkbox" name="is_enabled" value="true" <%= s.is_enabled ? 'checked' : '' %>/>
@@ -91,6 +83,22 @@
         </form>
       <% } %>
     </div>
+  </section>
+
+  <section class="surface-card surface-card--stacked">
+    <header class="section-heading">
+      <div>
+        <h3>Authentication</h3>
+        <p class="muted" style="margin: 0;">Configure how this MCP server authenticates to upstream APIs.</p>
+      </div>
+      <% if (s.id) { %>
+        <a class="button" href="/admin/mcp/<%= s.id %>/auth?key=<%= encodeURIComponent(query?.key || '') %>">Edit auth</a>
+      <% } %>
+    </header>
+    <p style="margin: 0;">Auth: <strong><%= authSummary || 'None' %></strong></p>
+    <% if (!s.id) { %>
+      <p class="muted" style="margin: 0;">Save the server first, then configure authentication.</p>
+    <% } %>
   </section>
 
   <section class="surface-card">

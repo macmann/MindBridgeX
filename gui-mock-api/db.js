@@ -97,6 +97,8 @@ CREATE TABLE IF NOT EXISTS mcp_auth_configs (
   auth_type TEXT NOT NULL DEFAULT 'none',
   api_key_header_name TEXT,
   api_key_value TEXT,
+  api_key_query_name TEXT,
+  api_key_query_value TEXT,
   bearer_token TEXT,
   basic_username TEXT,
   basic_password TEXT,
@@ -173,7 +175,17 @@ function ensureMcpAuthSchema() {
     db.exec("ALTER TABLE mcp_auth_configs ADD COLUMN extra_headers_json TEXT DEFAULT '{}'");
   }
 
+  if (!columnNames.has('api_key_query_name')) {
+    db.exec('ALTER TABLE mcp_auth_configs ADD COLUMN api_key_query_name TEXT');
+  }
+
+  if (!columnNames.has('api_key_query_value')) {
+    db.exec('ALTER TABLE mcp_auth_configs ADD COLUMN api_key_query_value TEXT');
+  }
+
   db.exec("UPDATE mcp_auth_configs SET extra_headers_json = COALESCE(NULLIF(extra_headers_json, ''), '{}')");
+  db.exec("UPDATE mcp_auth_configs SET api_key_query_name = COALESCE(api_key_query_name, '')");
+  db.exec("UPDATE mcp_auth_configs SET api_key_query_value = COALESCE(api_key_query_value, '')");
 }
 
 ensureMcpToolsSchema();
@@ -331,7 +343,7 @@ function normalizeMcpServer(row) {
 const DEFAULT_JSON_TEXT = '{}';
 const VALID_HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'DELETE', 'PATCH']);
 const MCP_TOOL_NAME_PATTERN = /^[A-Za-z0-9_-]+$/;
-const VALID_AUTH_TYPES = new Set(['none', 'api_key_header', 'bearer_token', 'basic']);
+const VALID_AUTH_TYPES = new Set(['none', 'api_key_header', 'api_key_query', 'bearer_token', 'basic']);
 
 function coerceOptionalString(value, fallback = '') {
   if (value === undefined || value === null) {
@@ -413,6 +425,13 @@ function normalizeMcpAuthConfig(row) {
   return {
     ...row,
     auth_type: coerceAuthType(row.auth_type),
+    api_key_header_name: coerceOptionalString(row.api_key_header_name),
+    api_key_value: coerceOptionalString(row.api_key_value),
+    api_key_query_name: coerceOptionalString(row.api_key_query_name),
+    api_key_query_value: coerceOptionalString(row.api_key_query_value),
+    bearer_token: coerceOptionalString(row.bearer_token),
+    basic_username: coerceOptionalString(row.basic_username),
+    basic_password: coerceOptionalString(row.basic_password),
     extra_headers_json: row.extra_headers_json ? String(row.extra_headers_json) : DEFAULT_JSON_TEXT
   };
 }
@@ -933,6 +952,8 @@ export function upsertMcpAuthConfig(mcpServerId, authData = {}) {
     auth_type: authType,
     api_key_header_name: '',
     api_key_value: '',
+    api_key_query_name: '',
+    api_key_query_value: '',
     bearer_token: '',
     basic_username: '',
     basic_password: ''
@@ -946,6 +967,15 @@ export function upsertMcpAuthConfig(mcpServerId, authData = {}) {
     resolved.api_key_value = coerceOptionalString(
       authData.api_key_value,
       existing?.api_key_value || ''
+    );
+  } else if (authType === 'api_key_query') {
+    resolved.api_key_query_name = coerceOptionalString(
+      authData.api_key_query_name,
+      existing?.api_key_query_name || ''
+    );
+    resolved.api_key_query_value = coerceOptionalString(
+      authData.api_key_query_value,
+      existing?.api_key_query_value || ''
     );
   } else if (authType === 'bearer_token') {
     resolved.bearer_token = coerceOptionalString(authData.bearer_token, existing?.bearer_token || '');
@@ -969,6 +999,8 @@ export function upsertMcpAuthConfig(mcpServerId, authData = {}) {
     auth_type: resolved.auth_type,
     api_key_header_name: resolved.api_key_header_name,
     api_key_value: resolved.api_key_value,
+    api_key_query_name: resolved.api_key_query_name,
+    api_key_query_value: resolved.api_key_query_value,
     bearer_token: resolved.bearer_token,
     basic_username: resolved.basic_username,
     basic_password: resolved.basic_password,
@@ -983,10 +1015,12 @@ export function upsertMcpAuthConfig(mcpServerId, authData = {}) {
   db.prepare(`
     INSERT INTO mcp_auth_configs (
       id, mcp_server_id, auth_type, api_key_header_name, api_key_value,
+      api_key_query_name, api_key_query_value,
       bearer_token, basic_username, basic_password, extra_headers_json,
       created_at, updated_at
     ) VALUES (
       @id, @mcp_server_id, @auth_type, @api_key_header_name, @api_key_value,
+      @api_key_query_name, @api_key_query_value,
       @bearer_token, @basic_username, @basic_password, @extra_headers_json,
       @created_at, @updated_at
     )
@@ -994,6 +1028,8 @@ export function upsertMcpAuthConfig(mcpServerId, authData = {}) {
       auth_type=excluded.auth_type,
       api_key_header_name=excluded.api_key_header_name,
       api_key_value=excluded.api_key_value,
+      api_key_query_name=excluded.api_key_query_name,
+      api_key_query_value=excluded.api_key_query_value,
       bearer_token=excluded.bearer_token,
       basic_username=excluded.basic_username,
       basic_password=excluded.basic_password,

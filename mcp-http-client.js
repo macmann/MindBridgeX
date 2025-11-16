@@ -22,7 +22,7 @@ export async function executeMcpHttpTool({ tool, authConfig, args }) {
   const headers = buildHeaders(headersMapping, authConfig);
 
   // 5) Construct final URL
-  const url = buildUrl(baseUrl, path, queryParams);
+  const url = buildUrl(baseUrl, path, queryParams, authConfig);
 
   const fetchOptions = {
     method,
@@ -112,14 +112,16 @@ function buildBody(mapping, args, method) {
 function buildHeaders(mapping, authConfig) {
   const headers = {};
 
-  // Apply static headers from mapping
+  // Static headers from tool mapping
   for (const [key, value] of Object.entries(mapping || {})) {
-    if (value != null) {
-      headers[key] = String(value);
+    if (value == null) continue;
+    if (typeof value === 'object' && value.fromArg) {
+      continue;
     }
+    headers[key] = String(value);
   }
 
-  // Apply extra headers JSON from auth config
+  // Extra headers from auth config (JSON)
   if (authConfig?.extra_headers_json) {
     try {
       const extra = JSON.parse(authConfig.extra_headers_json);
@@ -131,7 +133,7 @@ function buildHeaders(mapping, authConfig) {
     }
   }
 
-  // Apply auth type
+  // Auth-specific headers
   switch (authConfig?.auth_type) {
     case 'api_key_header': {
       const headerName = authConfig.api_key_header_name || 'X-API-Key';
@@ -147,32 +149,41 @@ function buildHeaders(mapping, authConfig) {
       break;
     }
     case 'basic': {
-      if (authConfig.basic_username || authConfig.basic_password) {
-        const token = Buffer.from(
-          `${authConfig.basic_username || ''}:${authConfig.basic_password || ''}`,
-          'utf8'
-        ).toString('base64');
+      const user = authConfig.basic_username || '';
+      const pass = authConfig.basic_password || '';
+      if (user || pass) {
+        const token = Buffer.from(`${user}:${pass}`, 'utf8').toString('base64');
         headers['Authorization'] = `Basic ${token}`;
       }
       break;
     }
     default:
-      // no auth
+      // none or api_key_query (handled in query builder)
       break;
   }
 
   return headers;
 }
 
-function buildUrl(baseUrl, path, queryParams) {
-  let url = baseUrl + path;
+function buildUrl(baseUrl, path, queryParams, authConfig) {
+  const urlBase = baseUrl.replace(/\/+$/, '') + path;
+
   const searchParams = new URLSearchParams();
+
+  // query params from tool mapping
   for (const [k, v] of Object.entries(queryParams || {})) {
     searchParams.append(k, v);
   }
-  const qs = searchParams.toString();
-  if (qs) {
-    url += (url.includes('?') ? '&' : '?') + qs;
+
+  // API key in query
+  if (authConfig?.auth_type === 'api_key_query') {
+    const name = authConfig.api_key_query_name || 'api_key';
+    const value = authConfig.api_key_query_value;
+    if (value) {
+      searchParams.append(name, value);
+    }
   }
-  return url;
+
+  const qs = searchParams.toString();
+  return qs ? `${urlBase}?${qs}` : urlBase;
 }

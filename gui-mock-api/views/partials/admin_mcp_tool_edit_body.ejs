@@ -250,6 +250,12 @@
     <p><strong>Type:</strong> <%= authConfig.auth_type || 'none' %></p>
     <% if (authConfig.auth_type === 'api_key_header') { %>
       <p><strong>Header:</strong> <%= authConfig.api_key_header_name || 'X-API-Key' %></p>
+    <% } else if (authConfig.auth_type === 'api_key_query') { %>
+      <p><strong>Query param:</strong> <%= authConfig.api_key_query_name || 'api_key' %></p>
+    <% } else if (authConfig.auth_type === 'bearer_token') { %>
+      <p><strong>Bearer token configured.</strong></p>
+    <% } else if (authConfig.auth_type === 'basic') { %>
+      <p><strong>Basic auth username:</strong> <%= authConfig.basic_username || '(not set)' %></p>
     <% } %>
   <% } else { %>
     <p class="muted">No auth config set for this MCP server.</p>
