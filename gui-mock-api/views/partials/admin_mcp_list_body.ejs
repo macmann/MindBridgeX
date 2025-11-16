@@ -66,7 +66,7 @@
               <div class="table-actions">
                 <a class="secondary" href="/admin/mcp/<%= s.id %>/info?key=<%= encodeURIComponent(query?.key || '') %>">Info</a>
                 <a class="secondary" href="/admin/mcp/<%= s.id %>?key=<%= encodeURIComponent(query?.key || '') %>">Edit</a>
-                <a class="secondary" href="/admin/mcp/<%= s.id %>/tools?key=<%= encodeURIComponent(query?.key || '') %>">Tools</a>
+                <a class="secondary" href="/admin/mcp/<%= s.id %>/tools?key=<%= encodeURIComponent(query?.key || '') %>">Configure tools</a>
                 <% if (s.is_enabled) { %>
                   <form method="post" action="/admin/mcp/<%= s.id %>/disable?key=<%= encodeURIComponent(query?.key || '') %>">
                     <button class="button contrast" type="submit">Disable</button>

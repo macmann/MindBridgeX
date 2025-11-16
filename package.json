@@ -24,8 +24,10 @@
     "http-errors": "^2.0.0",
     "morgan": "^1.10.0",
     "nanoid": "^4.0.2",
+    "openapi-types": "^12.0.0",
     "openai": "^4.0.0",
     "@modelcontextprotocol/sdk": "*",
+    "yaml": "^2.6.0",
     "zod": "^3.23.8",
     "yup": "^1.4.0"
   }

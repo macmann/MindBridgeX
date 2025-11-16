@@ -1,13 +1,25 @@
+<% const adminKeyParam = key ? `?key=${encodeURIComponent(key)}` : ''; %>
+
 <section class="page-hero">
   <div class="page-hero__content">
-    <h2>MCP tools for <%= s.name %></h2>
-    <p>Each tool maps to one existing mock endpoint and exposes it to MCP clients.</p>
+    <h2>MCP tools for <%= mcpServer.name %></h2>
+    <p>Configure tools for this MCP server by selecting existing APIs or importing an OpenAPI spec.</p>
+    <p class="muted" style="margin: 0.35rem 0 0;">
+      Slug: <code><%= mcpServer.slug %></code> · MCP path: <code><%= mcpPath %></code>
+      <% if (mcpUrl && mcpUrl !== mcpPath) { %>
+        · Full URL: <code><%= mcpUrl %></code>
+      <% } %>
+    </p>
   </div>
   <div class="page-hero__actions">
-    <a class="secondary" href="/admin/mcp?key=<%= encodeURIComponent(query?.key || '') %>">Back to servers</a>
-    <a class="button" href="/admin/mcp/<%= s.id %>/info?key=<%= encodeURIComponent(query?.key || '') %>">Connection info</a>
+    <a class="secondary" href="/admin/mcp<%= adminKeyParam %>">Back to servers</a>
+    <a class="button" href="/admin/mcp/<%= mcpServer.id %>/info<%= adminKeyParam %>">Connection info</a>
   </div>
 </section>
+
+<% if (error) { %>
+  <div class="flash flash-error"><%= error %></div>
+<% } %>
 
 <section class="surface-card surface-card--stacked">
   <header class="section-heading">
@@ -17,7 +29,7 @@
     </div>
   </header>
   <% if (!tools || tools.length === 0) { %>
-    <p class="muted" style="margin: 0;">No tools yet. Create one below to expose a mock endpoint.</p>
+    <p class="muted" style="margin: 0;">No tools yet. Use the flows below to create MCP tools.</p>
   <% } else { %>
     <div class="table-card">
       <table>
@@ -33,11 +45,11 @@
           <% for (const t of tools || []) { %>
             <tr>
               <td><code><%= t.name %></code></td>
-              <td><code><%= t.method %> <%= t.path %></code></td>
+              <td><code><%= (t.http_method || t.method || '').toUpperCase() %> <%= t.path_template || t.path || '' %></code></td>
               <td><%= t.description || '' %></td>
               <td>
                 <div class="table-actions">
-                  <form method="post" action="/admin/mcp/<%= s.id %>/tools/<%= t.id %>/delete?key=<%= encodeURIComponent(query?.key || '') %>" onsubmit="return confirm('Delete this tool?');">
+                  <form method="post" action="/admin/mcp/<%= mcpServer.id %>/tools/<%= t.id %>/delete<%= adminKeyParam %>" onsubmit="return confirm('Delete this tool?');">
                     <button class="button contrast" type="submit">Delete</button>
                   </form>
                 </div>
@@ -53,47 +65,117 @@
 <section class="surface-card surface-card--stacked">
   <header class="section-heading">
     <div>
-      <h3>Add or update tool</h3>
-      <p class="muted" style="margin: 0;">Choose an endpoint and optionally describe the expected arguments.</p>
+      <h3>Option 1 - Select from API list</h3>
+      <p class="muted" style="margin: 0;">Use APIs already defined in the mock server to create MCP tools instantly.</p>
     </div>
   </header>
-  <form method="post" action="/admin/mcp/<%= s.id %>/tools/save?key=<%= encodeURIComponent(query?.key || '') %>" class="form-stack">
-    <input type="hidden" name="id" value=""/>
-
-    <div class="form-grid form-grid--two">
-      <label class="stack">
-        <span>Tool name</span>
-        <input name="name" placeholder="getUserDetails" required/>
-      </label>
-
-      <label class="stack">
-        <span>Description</span>
-        <input name="description" placeholder="Fetch user details from mock API"/>
-      </label>
+  <form method="post" action="/admin/mcp/<%= mcpServer.id %>/tools/from-existing">
+    <input type="hidden" name="key" value="<%= key %>">
+    <div class="table-card">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 2rem;"></th>
+            <th>Name</th>
+            <th>Method</th>
+            <th>Path</th>
+            <th>Description</th>
+            <th>Base URL</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (!existingApis || existingApis.length === 0) { %>
+            <tr>
+              <td class="empty-state" colspan="6">No API definitions found. Create mock endpoints first.</td>
+            </tr>
+          <% } %>
+          <% for (const api of existingApis || []) { %>
+            <tr>
+              <td><input type="checkbox" name="apiIds" value="<%= api.id %>"></td>
+              <td><strong><%= api.name || api.path %></strong></td>
+              <td><code><%= (api.method || '').toUpperCase() %></code></td>
+              <td><code><%= api.path %></code></td>
+              <td><%= api.description || '' %></td>
+              <td><code><%= api.baseUrl || '' %></code></td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
     </div>
-
-    <label class="stack">
-      <span>Endpoint</span>
-      <select name="endpoint_id" required>
-        <option value="">-- Select endpoint --</option>
-        <% for (const e of endpoints || []) { %>
-          <option value="<%= e.id %>"><%= e.method %> <%= e.path %></option>
-        <% } %>
-      </select>
-    </label>
-
-    <label class="stack">
-      <span>Arg schema (JSON)</span>
-      <textarea name="arg_schema" rows="6" placeholder='{
-  "type": "object",
-  "properties": {
-    "userid": { "type": "string", "description": "User ID" }
-  },
-  "required": ["userid"]
-}'></textarea>
-      <small class="muted">Optional: describe the arguments your tool expects.</small>
-    </label>
-
-    <button class="button primary" type="submit" style="justify-self: flex-start;">Save tool</button>
+    <button class="button" type="submit" style="margin-top: 1rem;">Create tools from selected APIs</button>
   </form>
+</section>
+
+<section class="surface-card surface-card--stacked">
+  <header class="section-heading">
+    <div>
+      <h3>Option 2 - Import OpenAPI spec</h3>
+      <p class="muted" style="margin: 0;">Paste JSON or YAML. Preview the operations, edit names and descriptions, then save as tools.</p>
+    </div>
+  </header>
+
+  <form method="post" action="/admin/mcp/<%= mcpServer.id %>/tools/openapi/preview" class="form-stack">
+    <input type="hidden" name="key" value="<%= key %>">
+    <label class="stack">
+      <span>OpenAPI Spec (JSON or YAML)</span>
+      <textarea name="openapi_spec" rows="12" placeholder="Paste OpenAPI spec here"><%= rawOpenapiSpec || '' %></textarea>
+    </label>
+    <button class="button" type="submit" style="justify-self: flex-start;">Import &amp; Preview</button>
+  </form>
+
+  <% if (openapiPreview) { %>
+    <div class="divider"></div>
+    <h4 style="margin-top: 0;">Preview operations</h4>
+    <% if (!openapiPreview.length) { %>
+      <p class="muted">No operations found in the provided spec.</p>
+    <% } else { %>
+      <form method="post" action="/admin/mcp/<%= mcpServer.id %>/tools/openapi/save" class="form-stack">
+        <input type="hidden" name="key" value="<%= key %>">
+        <label class="stack">
+          <span>Base URL (optional)</span>
+          <input type="text" name="base_url" value="<%= mcpUrl || '' %>" placeholder="https://api.example.com" />
+        </label>
+        <div class="table-card">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 2rem;"></th>
+                <th>Tool name</th>
+                <th>Method</th>
+                <th>Path</th>
+                <th>Summary</th>
+                <th>Description (editable)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% openapiPreview.forEach((op, index) => { %>
+                <tr>
+                  <td>
+                    <input type="checkbox" name="ops[<%= index %>][selected]" value="true" checked />
+                  </td>
+                  <td>
+                    <input type="text" name="ops[<%= index %>][tool_name]" value="<%= op.suggestedName || op.operationId %>" />
+                  </td>
+                  <td><code><%= op.method %></code></td>
+                  <td><code><%= op.path %></code></td>
+                  <td><%= op.summary || '' %></td>
+                  <td>
+                    <textarea name="ops[<%= index %>][description]" rows="3"><%= op.description || op.summary || '' %></textarea>
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="6" style="display: none;">
+                    <input type="hidden" name="ops[<%= index %>][method]" value="<%= op.method %>" />
+                    <input type="hidden" name="ops[<%= index %>][path]" value="<%= op.path %>" />
+                    <input type="hidden" name="ops[<%= index %>][operationId]" value="<%= op.operationId %>" />
+                  </td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+        <button class="button" type="submit" style="justify-self: flex-start;">Save selected tools</button>
+      </form>
+    <% } %>
+  <% } %>
 </section>

@@ -6,6 +6,7 @@ import compression from 'compression';
 import createError from 'http-errors';
 import { fileURLToPath } from 'url';
 import { nanoid } from 'nanoid';
+import YAML from 'yaml';
 
 import { buildRuntimeRouter } from './router-runtime.js';
 import {
@@ -20,11 +21,15 @@ import {
   getLog,
   listMcpServers,
   getMcpServer,
+  getMcpServerWithTools,
   findMcpServerBySlug,
   findDefaultEnabledMcpServer,
   upsertMcpServer,
   deleteMcpServer,
   setMcpServerEnabled,
+  listExistingApiDefinitions,
+  getExistingApiById,
+  createMcpTool,
   listMcpTools,
   listMcpToolsWithEndpoints,
   upsertMcpTool,
@@ -38,6 +43,7 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const ADMIN_KEY = process.env.ADMIN_KEY || process.env.ADMIN_TOKEN || process.env.ADMIN_SECRET || '';
+const SUPPORTED_HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']);
 
 function truncateHeadersForLog(headers = {}) {
   const out = {};
@@ -324,6 +330,55 @@ function appendSlugToBase(base, slug) {
 
 function buildMcpUrl(base, slug) {
   return appendSlugToBase(base, slug) || buildMcpPath(slug);
+}
+
+function deriveBaseUrl(req, server) {
+  const stored = typeof server?.base_url === 'string' ? server.base_url.trim() : '';
+  if (stored) return stored;
+  const hostHeader = req.get('host');
+  return hostHeader ? `${req.protocol}://${hostHeader}` : '';
+}
+
+function slugifyToolName(value) {
+  if (!value) return 'tool';
+  return String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .replace(/_{2,}/g, '_')
+    .slice(0, 120) || 'tool';
+}
+
+function deriveToolNameFromApi(api) {
+  if (!api) return 'tool';
+  const candidates = [api.name, `${api.method || ''} ${api.path || ''}`];
+  const chosen = candidates.find((value) => value && String(value).trim());
+  return slugifyToolName(chosen);
+}
+
+function isTruthyInput(value) {
+  return value === true || value === 'true' || value === 'on' || value === '1';
+}
+
+function buildMcpToolsRenderData(req, mcpServer, key, extras = {}) {
+  const baseUrl = deriveBaseUrl(req, mcpServer);
+  const existingApis = listExistingApiDefinitions().map((api) => ({
+    ...api,
+    baseUrl: api.baseUrl || baseUrl
+  }));
+  const mcpPath = buildMcpPath(mcpServer.slug);
+  const mcpUrl = baseUrl ? buildMcpUrl(baseUrl, mcpServer.slug) : mcpPath;
+
+  return {
+    title: extras.title || `MCP Tools – ${mcpServer.name}`,
+    mcpServer,
+    tools: mcpServer.tools || [],
+    existingApis,
+    key,
+    mcpPath,
+    mcpUrl,
+    ...extras
+  };
 }
 
 function extractPathParams(pathPattern) {
@@ -1132,11 +1187,164 @@ app.post('/admin/mcp/:id/disable', requireAdmin, (req, res) => {
 
 // Manage tools for an MCP server
 app.get('/admin/mcp/:id/tools', requireAdmin, (req, res) => {
-  const s = getMcpServer(req.params.id);
-  if (!s) return res.status(404).send('MCP server not found');
-  const tools = listMcpToolsWithEndpoints(s.id);
-  const endpoints = allEndpoints();
-  res.render('admin_mcp_tools', { s, tools, endpoints, query: req.query });
+  const mcpServer = getMcpServerWithTools(req.params.id, { includeDisabled: true });
+  if (!mcpServer) return res.status(404).send('MCP server not found');
+
+  const key = getAdminKeyValue(req, res);
+  const viewModel = buildMcpToolsRenderData(req, mcpServer, key);
+
+  res.render('admin_mcp_tools', viewModel);
+});
+
+app.post('/admin/mcp/:id/tools/from-existing', requireAdmin, (req, res) => {
+  const serverId = req.params.id;
+  const key = req.body.key || '';
+  const apiIdsRaw = req.body.apiIds;
+  const apiIds = Array.isArray(apiIdsRaw) ? apiIdsRaw : [apiIdsRaw].filter(Boolean);
+
+  for (const apiId of apiIds) {
+    const api = getExistingApiById(apiId);
+    if (!api) continue;
+
+    const toolName = deriveToolNameFromApi(api);
+    try {
+      createMcpTool({
+        mcp_server_id: serverId,
+        name: toolName,
+        description: api.description || '',
+        input_schema_json: JSON.stringify({
+          type: 'object',
+          properties: {},
+          additionalProperties: true
+        }),
+        http_method: api.method,
+        base_url: api.baseUrl || '',
+        path_template: api.path,
+        query_mapping_json: JSON.stringify({}),
+        body_mapping_json: JSON.stringify({}),
+        headers_mapping_json: JSON.stringify({}),
+        enabled: true
+      });
+    } catch (err) {
+      console.error('Failed to create MCP tool from existing API', { apiId, error: err?.message || err });
+    }
+  }
+
+  res.redirect(`/admin/mcp/${encodeURIComponent(serverId)}/tools?key=${encodeURIComponent(key)}`);
+});
+
+app.post('/admin/mcp/:id/tools/openapi/preview', requireAdmin, (req, res) => {
+  const serverId = req.params.id;
+  const key = req.body.key || '';
+  const rawSpec = req.body.openapi_spec || '';
+
+  let parsed;
+  try {
+    try {
+      parsed = JSON.parse(rawSpec);
+    } catch (jsonErr) {
+      parsed = YAML.parse(rawSpec);
+    }
+  } catch (err) {
+    const mcpServer = getMcpServerWithTools(serverId, { includeDisabled: true });
+    if (!mcpServer) return res.status(404).send('MCP server not found');
+    const viewModel = buildMcpToolsRenderData(req, mcpServer, key, {
+      error: `Failed to parse OpenAPI spec: ${err.message}`,
+      rawOpenapiSpec: rawSpec
+    });
+    return res.render('admin_mcp_tools', viewModel);
+  }
+
+  const operations = [];
+  const paths = parsed?.paths || {};
+  for (const [pathKey, methods] of Object.entries(paths)) {
+    if (!methods || typeof methods !== 'object') continue;
+    for (const [methodKey, op] of Object.entries(methods)) {
+      const upperMethod = String(methodKey || '').toUpperCase();
+      if (!SUPPORTED_HTTP_METHODS.has(upperMethod)) continue;
+      const opData = op || {};
+      const summary = opData.summary || '';
+      const description = opData.description || '';
+      const operationId = opData.operationId || `${upperMethod}_${pathKey}`;
+
+      operations.push({
+        operationId,
+        method: upperMethod,
+        path: pathKey,
+        summary,
+        description,
+        suggestedName: deriveToolNameFromApi({
+          name: operationId || summary,
+          method: upperMethod,
+          path: pathKey
+        }),
+        raw: opData
+      });
+    }
+  }
+
+  const mcpServer = getMcpServerWithTools(serverId, { includeDisabled: true });
+  if (!mcpServer) return res.status(404).send('MCP server not found');
+  const viewModel = buildMcpToolsRenderData(req, mcpServer, key, {
+    openapiPreview: operations,
+    rawOpenapiSpec: rawSpec
+  });
+  return res.render('admin_mcp_tools', viewModel);
+});
+
+app.post('/admin/mcp/:id/tools/openapi/save', requireAdmin, (req, res) => {
+  const serverId = req.params.id;
+  const key = req.body.key || '';
+  const baseUrl = req.body.base_url || '';
+
+  const opsInput = req.body.ops || [];
+  const opsArray = Array.isArray(opsInput) ? opsInput : Object.values(opsInput);
+
+  for (const op of opsArray) {
+    if (!op) continue;
+    if (!isTruthyInput(op.selected)) continue;
+
+    const name = op.tool_name
+      ? slugifyToolName(op.tool_name)
+      : deriveToolNameFromApi({
+          name: op.operationId || `${op.method}_${op.path}`,
+          method: op.method,
+          path: op.path
+        });
+
+    const description = op.description || '';
+    const method = String(op.method || '').toUpperCase();
+    const path = op.path || '';
+
+    const inputSchema = {
+      type: 'object',
+      properties: {},
+      additionalProperties: true
+    };
+
+    try {
+      createMcpTool({
+        mcp_server_id: serverId,
+        name,
+        description,
+        input_schema_json: JSON.stringify(inputSchema),
+        http_method: method,
+        base_url: baseUrl,
+        path_template: path,
+        query_mapping_json: JSON.stringify({}),
+        body_mapping_json: JSON.stringify({}),
+        headers_mapping_json: JSON.stringify({}),
+        enabled: true
+      });
+    } catch (err) {
+      console.error('Failed to create MCP tool from OpenAPI operation', {
+        operationId: op.operationId,
+        error: err?.message || err
+      });
+    }
+  }
+
+  res.redirect(`/admin/mcp/${encodeURIComponent(serverId)}/tools?key=${encodeURIComponent(key)}`);
 });
 
 // Add / update a single tool

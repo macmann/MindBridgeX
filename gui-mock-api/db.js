@@ -406,6 +406,27 @@ export function allEndpoints() {
   return rows.map(normalizeEndpoint);
 }
 
+function mapEndpointToApiDefinition(endpoint) {
+  if (!endpoint) return null;
+  return {
+    id: endpoint.id,
+    name: endpoint.name || endpoint.path || endpoint.method,
+    method: endpoint.method,
+    path: endpoint.path,
+    description: endpoint.description || '',
+    baseUrl: ''
+  };
+}
+
+export function listExistingApiDefinitions() {
+  return allEndpoints().map(mapEndpointToApiDefinition).filter(Boolean);
+}
+
+export function getExistingApiById(apiId) {
+  const endpoint = getEndpoint(apiId);
+  return mapEndpointToApiDefinition(endpoint);
+}
+
 export function getEndpoint(id) {
   const row = db.prepare('SELECT * FROM endpoints WHERE id = ?').get(id);
   return normalizeEndpoint(row);
@@ -962,6 +983,8 @@ export default {
   findDefaultEnabledMcpServer,
   upsertMcpServer,
   deleteMcpServer,
+  listExistingApiDefinitions,
+  getExistingApiById,
   createMcpTool,
   listMcpToolsByServerId,
   listMcpTools,

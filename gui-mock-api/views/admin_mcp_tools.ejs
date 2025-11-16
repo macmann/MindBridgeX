@@ -1,10 +1,15 @@
 <%
-  const title = `MCP Tools · ${s.name}`;
+  const pageTitle = title || `MCP Tools · ${mcpServer?.name || 'MCP Server'}`;
   const body = include('partials/admin_mcp_tools_body', {
-    s,
+    mcpServer,
     tools,
-    endpoints,
-    query,
+    existingApis,
+    key,
+    mcpPath,
+    mcpUrl,
+    openapiPreview,
+    rawOpenapiSpec,
+    error
   });
 %>
-<%- include('layout', { title, body, adminKey: query?.key }) %>
+<%- include('layout', { title: pageTitle, body, adminKey: key }) %>
