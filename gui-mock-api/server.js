@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import { nanoid } from 'nanoid';
 import YAML from 'yaml';
 
+import { prisma } from '../lib/prisma.js';
 import { buildRuntimeRouter } from './router-runtime.js';
 import {
   allEndpoints,
@@ -46,6 +47,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.locals.prisma = prisma;
 const ADMIN_KEY = process.env.ADMIN_KEY || process.env.ADMIN_TOKEN || process.env.ADMIN_SECRET || '';
 const SUPPORTED_HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'DELETE', 'PATCH']);
 const SUPPORTED_AUTH_TYPES = new Set(['none', 'api_key_header', 'api_key_query', 'bearer_token', 'basic']);
