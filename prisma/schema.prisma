@@ -1,5 +1,5 @@
 // Prisma schema for Mindbridge X (SQLite)
-// Core models for users, projects, API connections, specs, and tool mappings.
+// Additional models will be added as persistence expands.
 
 generator client {
   provider = "prisma-client-js"
@@ -8,85 +8,6 @@ generator client {
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
-}
-
-enum AuthType {
-  NONE
-  API_KEY
-  BEARER
-  BASIC
-  OAUTH2
-}
-
-enum HttpMethod {
-  GET
-  POST
-  PUT
-  PATCH
-  DELETE
-  HEAD
-  OPTIONS
-}
-
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  projects  Project[]
-}
-
-model Project {
-  id          String          @id @default(cuid())
-  name        String
-  description String?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  userId      String
-  user        User            @relation(fields: [userId], references: [id])
-  apiConfigs  ApiConnection[]
-  specs       OpenApiSpec[]
-  mappings    ToolMapping[]
-}
-
-model ApiConnection {
-  id          String     @id @default(cuid())
-  name        String
-  baseUrl     String
-  authType    AuthType   @default(NONE)
-  authConfig  Json?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  projectId   String
-  project     Project    @relation(fields: [projectId], references: [id])
-  mappings    ToolMapping[]
-}
-
-model OpenApiSpec {
-  id        String   @id @default(cuid())
-  title     String?
-  rawSpec   Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  projectId String
-  project   Project  @relation(fields: [projectId], references: [id])
-}
-
-model ToolMapping {
-  id               String       @id @default(cuid())
-  toolName         String
-  description      String?
-  operationId      String?
-  endpointPath     String?
-  method           HttpMethod?
-  paramMapping     Json?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-  projectId        String
-  project          Project      @relation(fields: [projectId], references: [id])
-  apiConnectionId  String?
-  apiConnection    ApiConnection? @relation(fields: [apiConnectionId], references: [id])
 }
 
 model HealthCheck {
