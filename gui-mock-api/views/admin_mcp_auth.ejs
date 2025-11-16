@@ -1,0 +1,11 @@
+<%
+  const title = `MCP Auth – ${s.name}`;
+  const body = include('partials/admin_mcp_auth_body', {
+    s,
+    authConfig,
+    authSummary,
+    query,
+    key
+  });
+%>
+<%- include('layout', { title, body, adminKey: query?.key }) %>

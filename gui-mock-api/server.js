@@ -37,6 +37,7 @@ import {
   updateMcpTool,
   deleteMcpTool,
   getMcpAuthConfigByServerId,
+  upsertMcpAuthConfig,
   slugifyMcpSlug
 } from './db.js';
 import { createMcpRouter } from '../mcp-express.js';
@@ -47,6 +48,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const ADMIN_KEY = process.env.ADMIN_KEY || process.env.ADMIN_TOKEN || process.env.ADMIN_SECRET || '';
 const SUPPORTED_HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'DELETE', 'PATCH']);
+const SUPPORTED_AUTH_TYPES = new Set(['none', 'api_key_header', 'api_key_query', 'bearer_token', 'basic']);
 
 function truncateHeadersForLog(headers = {}) {
   const out = {};
@@ -361,6 +363,80 @@ function deriveToolNameFromApi(api) {
   return slugifyToolName(chosen);
 }
 
+function coerceAuthTypeInput(value) {
+  if (!value || typeof value !== 'string') return 'none';
+  const normalized = value.trim().toLowerCase();
+  return SUPPORTED_AUTH_TYPES.has(normalized) ? normalized : 'none';
+}
+
+function summarizeAuthConfig(authConfig) {
+  const type = coerceAuthTypeInput(authConfig?.auth_type);
+  switch (type) {
+    case 'api_key_header':
+      return `API Key (header ${authConfig?.api_key_header_name || 'X-API-Key'})`;
+    case 'api_key_query':
+      return `API Key (query ${authConfig?.api_key_query_name || 'api_key'})`;
+    case 'bearer_token':
+      return 'Bearer token';
+    case 'basic':
+      return 'Basic auth';
+    default:
+      return 'None';
+  }
+}
+
+function inferOpenapiAuth(spec) {
+  const components = spec?.components || {};
+  const securitySchemes = components.securitySchemes || {};
+
+  let primarySchemeKey = null;
+  if (Array.isArray(spec?.security) && spec.security.length > 0) {
+    const first = spec.security[0];
+    primarySchemeKey = Object.keys(first || {})[0] || null;
+  }
+  if (!primarySchemeKey) {
+    const keys = Object.keys(securitySchemes);
+    primarySchemeKey = keys.length > 0 ? keys[0] : null;
+  }
+  const primaryScheme = primarySchemeKey ? securitySchemes[primarySchemeKey] : null;
+
+  const inferredAuth = {
+    auth_type: 'none',
+    api_key_header_name: null,
+    api_key_query_name: null
+  };
+
+  if (primaryScheme) {
+    if (primaryScheme.type === 'apiKey') {
+      if (primaryScheme.in === 'header') {
+        inferredAuth.auth_type = 'api_key_header';
+        inferredAuth.api_key_header_name = primaryScheme.name || 'X-API-Key';
+      } else if (primaryScheme.in === 'query') {
+        inferredAuth.auth_type = 'api_key_query';
+        inferredAuth.api_key_query_name = primaryScheme.name || 'api_key';
+      }
+    } else if (primaryScheme.type === 'http') {
+      const scheme = (primaryScheme.scheme || '').toLowerCase();
+      if (scheme === 'bearer') {
+        inferredAuth.auth_type = 'bearer_token';
+      } else if (scheme === 'basic') {
+        inferredAuth.auth_type = 'basic';
+      }
+    }
+  }
+
+  return inferredAuth;
+}
+
+function parseOpenapiAuthFromBody(body = {}) {
+  const auth_type = coerceAuthTypeInput(body.openapi_auth_type);
+  return {
+    auth_type,
+    api_key_header_name: body.openapi_api_key_header_name || null,
+    api_key_query_name: body.openapi_api_key_query_name || null
+  };
+}
+
 function isTruthyInput(value) {
   return value === true || value === 'true' || value === 'on' || value === '1';
 }
@@ -403,7 +479,15 @@ function normalizeOpenapiOperationInput(op, index = 0) {
 }
 
 function buildMcpToolsRenderData(req, mcpServer, key, extras = {}) {
-  const { openapiPreview = null, rawOpenapiSpec = '', error = '' } = extras;
+  const {
+    openapiPreview = null,
+    rawOpenapiSpec = '',
+    error = '',
+    openapiAuthInference = null
+  } = extras;
+
+  const inferredAuth =
+    openapiAuthInference || ({ auth_type: 'none', api_key_header_name: null, api_key_query_name: null });
 
   const baseUrl = deriveBaseUrl(req, mcpServer);
   const existingApis = listExistingApiDefinitions().map((api) => ({
@@ -421,9 +505,12 @@ function buildMcpToolsRenderData(req, mcpServer, key, extras = {}) {
     key,
     mcpPath,
     mcpUrl,
+    authConfig: mcpServer.authConfig || null,
+    authSummary: summarizeAuthConfig(mcpServer.authConfig),
     ...extras,
     openapiPreview,
     rawOpenapiSpec,
+    openapiAuthInference: inferredAuth,
     error
   };
 }
@@ -1019,7 +1106,9 @@ app.get('/admin/mcp/new', requireAdmin, (req, res) => {
       is_enabled: 1
     },
     query: req.query,
-    errorMessage: null
+    errorMessage: null,
+    authConfig: { auth_type: 'none', api_key_header_name: '', api_key_query_name: '', extra_headers_json: '{}' },
+    authSummary: summarizeAuthConfig(null)
   });
 });
 
@@ -1027,7 +1116,32 @@ app.get('/admin/mcp/new', requireAdmin, (req, res) => {
 app.get('/admin/mcp/:id', requireAdmin, (req, res) => {
   const s = getMcpServer(req.params.id);
   if (!s) return res.status(404).send('MCP server not found');
-  res.render('admin_mcp_edit', { s, query: req.query, errorMessage: null });
+  const authConfig = getMcpAuthConfigByServerId(s.id);
+  res.render('admin_mcp_edit', {
+    s,
+    query: req.query,
+    errorMessage: null,
+    authConfig,
+    authSummary: summarizeAuthConfig(authConfig)
+  });
+});
+
+app.get('/admin/mcp/:id/auth', requireAdmin, (req, res) => {
+  const s = getMcpServer(req.params.id);
+  if (!s) return res.status(404).send('MCP server not found');
+  const authConfig = getMcpAuthConfigByServerId(s.id) || {
+    auth_type: 'none',
+    api_key_header_name: '',
+    api_key_query_name: '',
+    extra_headers_json: '{}'
+  };
+  res.render('admin_mcp_auth', {
+    s,
+    authConfig,
+    authSummary: summarizeAuthConfig(authConfig),
+    query: req.query,
+    key: getAdminKeyValue(req, res)
+  });
 });
 
 app.get('/admin/mcp/:id/info', requireAdmin, (req, res) => {
@@ -1128,6 +1242,31 @@ app.get('/admin/mcp/:id/info', requireAdmin, (req, res) => {
   });
 });
 
+app.post('/admin/mcp/:serverId/auth', requireAdmin, async (req, res, next) => {
+  const { serverId } = req.params;
+  const key = req.query.key || req.body.key || '';
+
+  const auth_type = (req.body.auth_type || 'none').trim();
+
+  try {
+    await upsertMcpAuthConfig(serverId, {
+      auth_type,
+      api_key_header_name: req.body.api_key_header_name || null,
+      api_key_value: req.body.api_key_value || null,
+      api_key_query_name: req.body.api_key_query_name || null,
+      api_key_query_value: req.body.api_key_query_value || null,
+      bearer_token: req.body.bearer_token || null,
+      basic_username: req.body.basic_username || null,
+      basic_password: req.body.basic_password || null,
+      extra_headers_json: req.body.extra_headers_json || null
+    });
+
+    res.redirect(`/admin/mcp/${serverId}?key=${encodeURIComponent(key)}&saved=auth`);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Save MCP server
 app.post('/admin/mcp/save', requireAdmin, (req, res) => {
   const body = req.body || {};
@@ -1153,10 +1292,13 @@ app.post('/admin/mcp/save', requireAdmin, (req, res) => {
       is_enabled: payload.is_enabled ? 1 : 0
     };
     const errorMessage = err?.message || 'Failed to save MCP server.';
+    const authConfig = payload.id ? getMcpAuthConfigByServerId(payload.id) : null;
     return res.status(400).render('admin_mcp_edit', {
       s: attempted,
       query: req.query,
-      errorMessage
+      errorMessage,
+      authConfig,
+      authSummary: summarizeAuthConfig(authConfig)
     });
   }
 });
@@ -1496,7 +1638,12 @@ app.post('/admin/mcp/:id/tools/from-existing', requireAdmin, (req, res) => {
   if (errorMessage) {
     const mcpServer = getMcpServerWithTools(serverId, { includeDisabled: true });
     if (!mcpServer) return res.status(404).send('MCP server not found');
-    const viewModel = buildMcpToolsRenderData(req, mcpServer, key, { error: errorMessage });
+    const viewModel = buildMcpToolsRenderData(req, mcpServer, key, {
+      error: errorMessage,
+      openapiPreview: normalizedOps,
+      openapiBaseUrl: baseUrl,
+      openapiAuthInference: inferredAuth
+    });
     return res.status(400).render('admin_mcp_tools', viewModel);
   }
 
@@ -1524,6 +1671,8 @@ app.post('/admin/mcp/:id/tools/openapi/preview', requireAdmin, (req, res) => {
     });
     return res.render('admin_mcp_tools', viewModel);
   }
+
+  const openapiAuthInference = inferOpenapiAuth(parsed);
 
   const operations = [];
   const paths = parsed?.paths || {};
@@ -1560,7 +1709,8 @@ app.post('/admin/mcp/:id/tools/openapi/preview', requireAdmin, (req, res) => {
   if (!mcpServer) return res.status(404).send('MCP server not found');
   const viewModel = buildMcpToolsRenderData(req, mcpServer, key, {
     openapiPreview: operations,
-    rawOpenapiSpec: rawSpec
+    rawOpenapiSpec: rawSpec,
+    openapiAuthInference
   });
   return res.render('admin_mcp_tools', viewModel);
 });
@@ -1569,6 +1719,7 @@ app.post('/admin/mcp/:id/tools/openapi/save', requireAdmin, (req, res) => {
   const serverId = req.params.id;
   const key = req.body.key || '';
   const baseUrl = req.body.base_url || '';
+  const inferredAuth = parseOpenapiAuthFromBody(req.body);
 
   const opsInput = req.body.ops || [];
   const opsArray = Array.isArray(opsInput) ? opsInput : Object.values(opsInput);
@@ -1580,9 +1731,26 @@ app.post('/admin/mcp/:id/tools/openapi/save', requireAdmin, (req, res) => {
     const viewModel = buildMcpToolsRenderData(req, mcpServer, key, {
       error: 'Select at least one operation to save as an MCP tool.',
       openapiPreview: normalizedOps,
-      openapiBaseUrl: baseUrl
+      openapiBaseUrl: baseUrl,
+      openapiAuthInference: inferredAuth
     });
     return res.status(400).render('admin_mcp_tools', viewModel);
+  }
+
+  const existingAuth = getMcpAuthConfigByServerId(serverId);
+  if (
+    inferredAuth.auth_type !== 'none' &&
+    (!existingAuth || existingAuth.auth_type === 'none' || existingAuth.auth_type === inferredAuth.auth_type)
+  ) {
+    try {
+      upsertMcpAuthConfig(serverId, {
+        auth_type: inferredAuth.auth_type,
+        api_key_header_name: inferredAuth.api_key_header_name || null,
+        api_key_query_name: inferredAuth.api_key_query_name || null
+      });
+    } catch (err) {
+      console.warn('Failed to persist inferred OpenAPI auth config', err);
+    }
   }
 
   let errorMessage = '';

@@ -1,0 +1,94 @@
+<section class="page-hero">
+  <div class="page-hero__content">
+    <h2>Authentication for <%= s.name %></h2>
+    <p>Configure how this MCP server authenticates to upstream APIs.</p>
+  </div>
+  <div class="page-hero__actions">
+    <a class="secondary" href="/admin/mcp/<%= s.id %>?key=<%= encodeURIComponent(query?.key || '') %>">Back to server</a>
+  </div>
+</section>
+
+<section class="surface-card surface-card--stacked">
+  <form method="post" action="/admin/mcp/<%= s.id %>/auth?key=<%= encodeURIComponent(query?.key || '') %>" class="form-stack" id="auth-form">
+    <input type="hidden" name="key" value="<%= key || '' %>" />
+
+    <label class="stack">
+      <span>Auth type</span>
+      <select name="auth_type" id="auth-type-select">
+        <option value="none" <%= authConfig?.auth_type === 'none' ? 'selected' : '' %>>None</option>
+        <option value="api_key_header" <%= authConfig?.auth_type === 'api_key_header' ? 'selected' : '' %>>API key in header</option>
+        <option value="api_key_query" <%= authConfig?.auth_type === 'api_key_query' ? 'selected' : '' %>>API key in query</option>
+        <option value="bearer_token" <%= authConfig?.auth_type === 'bearer_token' ? 'selected' : '' %>>Bearer / JWT</option>
+        <option value="basic" <%= authConfig?.auth_type === 'basic' ? 'selected' : '' %>>Basic auth</option>
+      </select>
+    </label>
+
+    <div class="form-grid form-grid--two auth-field" data-auth="api_key_header">
+      <label class="stack">
+        <span>Header name</span>
+        <input name="api_key_header_name" value="<%= authConfig?.api_key_header_name || '' %>" placeholder="X-API-Key" />
+      </label>
+      <label class="stack">
+        <span>API key value</span>
+        <input name="api_key_value" value="<%= authConfig?.api_key_value || '' %>" placeholder="secret" />
+      </label>
+    </div>
+
+    <div class="form-grid form-grid--two auth-field" data-auth="api_key_query">
+      <label class="stack">
+        <span>Query parameter name</span>
+        <input name="api_key_query_name" value="<%= authConfig?.api_key_query_name || '' %>" placeholder="api_key" />
+      </label>
+      <label class="stack">
+        <span>API key value</span>
+        <input name="api_key_query_value" value="<%= authConfig?.api_key_query_value || '' %>" placeholder="secret" />
+      </label>
+    </div>
+
+    <div class="auth-field" data-auth="bearer_token">
+      <label class="stack">
+        <span>Bearer token</span>
+        <input name="bearer_token" value="<%= authConfig?.bearer_token || '' %>" placeholder="eyJhbGciOiJIUzI1..." />
+      </label>
+    </div>
+
+    <div class="form-grid form-grid--two auth-field" data-auth="basic">
+      <label class="stack">
+        <span>Username</span>
+        <input name="basic_username" value="<%= authConfig?.basic_username || '' %>" placeholder="user" />
+      </label>
+      <label class="stack">
+        <span>Password</span>
+        <input type="password" name="basic_password" value="<%= authConfig?.basic_password || '' %>" placeholder="password" />
+      </label>
+    </div>
+
+    <label class="stack">
+      <span>Extra headers (JSON object)</span>
+      <textarea name="extra_headers_json" rows="4" placeholder='{ "X-Env": "staging" }'><%= authConfig?.extra_headers_json || '{}' %></textarea>
+    </label>
+
+    <div class="form-actions" style="justify-content: flex-start; gap: 0.5rem;">
+      <button class="button primary" type="submit">Save authentication</button>
+      <a class="secondary" href="/admin/mcp/<%= s.id %>?key=<%= encodeURIComponent(query?.key || '') %>">Cancel</a>
+    </div>
+  </form>
+</section>
+
+<script>
+  (function () {
+    const select = document.getElementById('auth-type-select');
+    const fields = document.querySelectorAll('.auth-field');
+
+    function updateVisibility() {
+      const value = select.value;
+      fields.forEach((field) => {
+        const allowed = field.dataset.auth === value;
+        field.style.display = allowed ? '' : 'none';
+      });
+    }
+
+    select.addEventListener('change', updateVisibility);
+    updateVisibility();
+  })();
+</script>

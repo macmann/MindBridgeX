@@ -127,11 +127,30 @@
   <% if (openapiPreview) { %>
     <div class="divider"></div>
     <h4 style="margin-top: 0;">Preview operations</h4>
+    <% const authHint = openapiAuthInference || { auth_type: 'none' }; %>
+    <% if (authHint.auth_type && authHint.auth_type !== 'none') { %>
+      <div class="flash flash-info">
+        This OpenAPI spec defines an auth scheme: <strong><%= authHint.auth_type %></strong>.
+        <% if (authHint.auth_type === 'api_key_header') { %>
+          API Key in header <code><%= authHint.api_key_header_name || 'X-API-Key' %></code>.
+        <% } else if (authHint.auth_type === 'api_key_query') { %>
+          API Key in query param <code><%= authHint.api_key_query_name || 'api_key' %></code>.
+        <% } else if (authHint.auth_type === 'bearer_token') { %>
+          Bearer token authentication.
+        <% } else if (authHint.auth_type === 'basic') { %>
+          Basic authentication.
+        <% } %>
+        After import, please configure the actual key/token under MCP Auth Settings.
+      </div>
+    <% } %>
     <% if (!openapiPreview.length) { %>
       <p class="muted">No operations found in the provided spec.</p>
     <% } else { %>
       <form method="post" action="/admin/mcp/<%= mcpServer.id %>/tools/openapi/save" class="form-stack openapi-preview">
         <input type="hidden" name="key" value="<%= key %>">
+        <input type="hidden" name="openapi_auth_type" value="<%= authHint.auth_type || 'none' %>">
+        <input type="hidden" name="openapi_api_key_header_name" value="<%= authHint.api_key_header_name || '' %>">
+        <input type="hidden" name="openapi_api_key_query_name" value="<%= authHint.api_key_query_name || '' %>">
         <label class="stack">
           <span>Base URL (optional)</span>
           <% const previewBaseUrl = typeof openapiBaseUrl !== 'undefined' ? openapiBaseUrl : mcpUrl; %>
