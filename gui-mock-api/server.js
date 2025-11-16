@@ -148,7 +148,9 @@ app.use('/mcp', (err, req, res, next) => {
   });
 });
 
-app.use(express.urlencoded({ extended: false }));
+// Use extended parsing so nested form fields like ops[0][selected] are parsed correctly
+// when saving OpenAPI-generated tools.
+app.use(express.urlencoded({ extended: true }));
 
 function sendMcpJsonRpcError(res, status, code, message) {
   return res.status(status).json({
