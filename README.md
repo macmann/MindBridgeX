@@ -95,11 +95,11 @@ API-MCPGenTool/
 - **Database**: Render's managed Postgres (or any external Postgres) must be wired in through the `DATABASE_URL` environment variable. SQLite files are not supported in the Render runtime filesystem, so always supply a Postgres URL when deploying there.
 - **Build command** (Render dashboard → _Build Command_):
   ```bash
-  npm install
-  npx prisma generate
-  npm run db:migrate:deploy
-  npm run build
+  npm install && npm run render:build
   ```
+  The `render:build` script chains `db:generate`, `db:migrate:deploy`, and `build` so Prisma runs inside `npm run`'s environment
+  (which automatically exposes `./node_modules/.bin`). This avoids relying on `npx`, which some managed builders omit from the
+  PATH even when `npm` is available.
 - **Start command** (Render dashboard → _Start Command_):
   ```bash
   npm start

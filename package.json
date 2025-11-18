@@ -17,7 +17,8 @@
     "db:migrate": "prisma migrate dev --name init",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:generate": "prisma generate",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "render:build": "npm run db:generate && npm run db:migrate:deploy && npm run build"
   },
   "engines": {
     "node": ">=18.0.0"
