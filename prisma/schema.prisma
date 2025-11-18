@@ -6,10 +6,7 @@ generator client {
 }
 
 datasource db {
-  /// Default to SQLite for local development to avoid requiring a Postgres instance.
-  /// When deploying to Postgres (Render, Neon, etc.), set `DATABASE_PROVIDER=postgresql`
-  /// so the Prisma helper script swaps the connector before running migrations.
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
