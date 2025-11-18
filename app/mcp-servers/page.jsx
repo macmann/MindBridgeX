@@ -25,7 +25,7 @@ export default async function McpServersPage({ searchParams }) {
         <header>
           <div>
             <h2>MCP servers</h2>
-            <p>Connections that expose MCP tools for this project.</p>
+            <p>Connections that expose MCP tools for this project. Configure tools per server after creation.</p>
           </div>
           <Link className="btn" href={withProjectHref('/mcp-servers/new', activeProjectId)}>
             Create MCP server
@@ -65,12 +65,12 @@ export default async function McpServersPage({ searchParams }) {
                         {server.isEnabled ? 'Enabled' : 'Disabled'}
                       </span>
                     </td>
-                    <td>
-                      <McpServerActions serverId={server.id} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+                  <td>
+                    <McpServerActions serverId={server.id} projectId={activeProjectId} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
             </table>
           </div>
         )}

@@ -1,11 +1,13 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-export default function McpServerActions({ serverId }) {
+export default function McpServerActions({ serverId, projectId }) {
   const router = useRouter();
   const [isDeleting, setIsDeleting] = useState(false);
+  const projectSuffix = projectId ? `?projectId=${projectId}` : '';
 
   const handleDelete = async () => {
     if (!serverId) return;
@@ -30,6 +32,9 @@ export default function McpServerActions({ serverId }) {
 
   return (
     <div className="table-actions">
+      <Link className="table-action" href={`/mcp-servers/${serverId}/tools${projectSuffix}`}>
+        Manage tools
+      </Link>
       <button className="table-action" type="button" aria-disabled="true" title="Detailed view coming soon">
         View
       </button>

@@ -37,8 +37,16 @@ export default function CreateMcpServerForm({ projectId }) {
       }
 
       const nextProjectId = searchParams.get('projectId') || projectId;
-      const nextUrl = nextProjectId ? `/mcp-servers?projectId=${nextProjectId}` : '/mcp-servers';
-      router.push(nextUrl);
+      const newServerId = data?.server?.id;
+      if (newServerId) {
+        const manageUrl = nextProjectId
+          ? `/mcp-servers/${newServerId}/tools?projectId=${nextProjectId}`
+          : `/mcp-servers/${newServerId}/tools`;
+        router.push(manageUrl);
+      } else {
+        const nextUrl = nextProjectId ? `/mcp-servers?projectId=${nextProjectId}` : '/mcp-servers';
+        router.push(nextUrl);
+      }
       router.refresh();
     } catch (error) {
       console.error('Failed to create MCP server', error);
