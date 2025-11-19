@@ -9,6 +9,8 @@ import prisma from '../../../lib/prisma.js';
 import { buildAbsoluteUrl, getMcpBaseUrl } from '../../../lib/url-utils.js';
 import '../../../components/detail/detail-page.css';
 
+const apiKeyHelper = 'Use this key when calling the mock server via x-api-key.';
+
 function withProjectHref(base, projectId) {
   if (!projectId) return base;
   const url = new URL(base, 'https://placeholder.local');
