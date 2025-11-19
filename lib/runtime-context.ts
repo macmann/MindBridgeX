@@ -48,10 +48,13 @@ export async function resolveActiveProject(userId, request) {
   return project;
 }
 
-async function resolveProjectFromApiKey(request) {
+async function resolveProjectFromApiKey(request, { requireApiKey = true } = {}) {
   const apiKey = readApiKeyHeader(request);
   if (!apiKey) {
-    throw missingApiKeyError();
+    if (requireApiKey) {
+      throw missingApiKeyError();
+    }
+    return null;
   }
 
   const project = await prisma.project.findUnique({ where: { apiKey } });
@@ -62,7 +65,7 @@ async function resolveProjectFromApiKey(request) {
   return { project, apiKey };
 }
 
-export async function getRuntimeContext(request) {
+export async function getRuntimeContext(request, { requireAuth = true } = {}) {
   const session = await getServerSession(authOptions);
   const userId = Number(session?.user?.id);
 
@@ -77,7 +80,12 @@ export async function getRuntimeContext(request) {
     };
   }
 
-  const { project, apiKey } = await resolveProjectFromApiKey(request);
+  const apiKeyResult = await resolveProjectFromApiKey(request, { requireApiKey: requireAuth });
+  if (!apiKeyResult) {
+    return null;
+  }
+
+  const { project, apiKey } = apiKeyResult;
   return {
     session: null,
     userId: project.userId,

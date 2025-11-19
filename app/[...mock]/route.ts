@@ -110,7 +110,7 @@ async function handleMockRequest(request, context) {
 
   const path = buildPathFromParams(context.params || {});
 
-  const runtime = await getRuntimeContext(request);
+  const runtime = await getRuntimeContext(request, { requireAuth: false });
   const providedApiKey = readApiKeyHeader(request);
 
   let route = await selectMockRoute({
