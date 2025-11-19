@@ -49,12 +49,10 @@ function formatResponseBody(route) {
   return route.responseBody;
 }
 
-function buildCurlCommand(route, url, headerEntries) {
+function buildCurlCommand(route, url, headerEntries, projectApiKey) {
   const lines = [`curl -X ${route.method} '${url}'`];
-  if (route.requireApiKey) {
-    const apiKeyValue = route.apiKey || '<ROUTE_API_KEY>';
-    lines.push(`  -H 'x-api-key: ${apiKeyValue}'`);
-  }
+  const apiKeyValue = projectApiKey || '<PROJECT_API_KEY>';
+  lines.push(`  -H 'x-api-key: ${apiKeyValue}'`);
   headerEntries.forEach(([key, value]) => {
     if (key.toLowerCase() === 'x-api-key') {
       return;
@@ -76,7 +74,7 @@ export default async function RouteDetailPage({ params, searchParams }) {
   const { session, userId, projects, activeProjectId } = await getDashboardContext(searchParams);
   const route = await prisma.mockRoute.findFirst({
     where: { id: routeId, userId },
-    include: { vars: true },
+    include: { vars: true, project: { select: { id: true, apiKey: true } } },
   });
   if (!route) {
     notFound();
@@ -85,15 +83,13 @@ export default async function RouteDetailPage({ params, searchParams }) {
   const projectId = route.projectId || activeProjectId;
   const backHref = withProjectHref('/routes', projectId);
   const mockBaseUrl = getMockBaseUrl();
+  const projectApiKey = route.project?.apiKey;
   const fullUrl = buildAbsoluteUrl(mockBaseUrl, route.path);
   const matchHeaderEntries = objectEntries(route.matchHeaders);
   const responseHeaderEntries = objectEntries(route.responseHeaders);
   const responseBody = formatResponseBody(route);
   const openApiSpec = formatRouteOpenApiDocument(route, { serverUrl: mockBaseUrl });
-  const curlCommand = buildCurlCommand(route, fullUrl, matchHeaderEntries);
-  const apiKeyHelper = route.requireApiKey
-    ? 'Share this value with clients as the x-api-key header.'
-    : 'This route is public and does not require an x-api-key.';
+  const curlCommand = buildCurlCommand(route, fullUrl, matchHeaderEntries, projectApiKey);
 
   return (
     <AppShell session={session} projects={projects} activeProjectId={projectId}>

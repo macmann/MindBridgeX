@@ -118,18 +118,15 @@ function formatConnectionPayload(endpoint, auth) {
   return JSON.stringify(payload, null, 2);
 }
 
-function buildCurlCommand(endpoint, auth, requireApiKey, serverApiKey) {
+function buildCurlCommand(endpoint, auth, projectApiKey) {
   const headers = auth.headers || {};
   const queryParams = auth.query || {};
   const queryString = Object.entries(queryParams)
     .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
     .join('&');
   const urlWithQuery = queryString ? `${endpoint}?${queryString}` : endpoint;
-  const lines = [`curl -X POST '${urlWithQuery}'`, "  -H 'Content-Type: application/json'`];
-  if (requireApiKey) {
-    const resolvedApiKey = serverApiKey || headers['x-api-key'] || headers['X-API-Key'] || '<MCP_SERVER_API_KEY>';
-    lines.push(`  -H 'x-api-key: ${resolvedApiKey}'`);
-  }
+  const resolvedApiKey = projectApiKey || headers['x-api-key'] || headers['X-API-Key'] || '<PROJECT_API_KEY>';
+  const lines = [`curl -X POST '${urlWithQuery}'`, "  -H 'Content-Type: application/json'", `  -H 'x-api-key: ${resolvedApiKey}'`];
   Object.entries(headers).forEach(([key, value]) => {
     if (key.toLowerCase() === 'x-api-key') {
       return;
@@ -152,6 +149,7 @@ export default async function McpServerDetailPage({ params, searchParams }) {
     include: {
       authConfig: true,
       tools: { orderBy: { name: 'asc' } },
+      project: { select: { id: true, apiKey: true } },
     },
   });
   if (!server) {
@@ -164,18 +162,13 @@ export default async function McpServerDetailPage({ params, searchParams }) {
   const mcpBaseUrl = getMcpBaseUrl();
   const endpoint = buildAbsoluteUrl(mcpBaseUrl, `/mcp/${server.slug}`);
   const authSamples = buildAuthSamples(server.authConfig);
-  const runtimeAuth = {
-    headers: { ...(authSamples.headers || {}) },
+  const projectApiKey = server.project?.apiKey;
+  const authWithProjectKey = {
+    headers: { ...(authSamples.headers || {}), 'x-api-key': projectApiKey || '<PROJECT_API_KEY>' },
     query: { ...(authSamples.query || {}) },
   };
-  if (server.requireApiKey) {
-    runtimeAuth.headers['x-api-key'] = server.apiKey || '<MCP_SERVER_API_KEY>';
-  }
-  const connectionJson = formatConnectionPayload(endpoint, runtimeAuth);
-  const curlCommand = buildCurlCommand(endpoint, runtimeAuth, server.requireApiKey, server.apiKey);
-  const apiKeyHelper = server.requireApiKey
-    ? 'Distribute this value to MCP clients as the x-api-key header.'
-    : 'This MCP server accepts calls without the x-api-key header.';
+  const connectionJson = formatConnectionPayload(endpoint, authWithProjectKey);
+  const curlCommand = buildCurlCommand(endpoint, authWithProjectKey, projectApiKey);
 
   return (
     <AppShell session={session} projects={projects} activeProjectId={projectId}>
