@@ -68,7 +68,7 @@ function ensureJsonRequest(request) {
 }
 
 export async function POST(request, context) {
-  const runtime = await getRuntimeContext(request);
+  const runtime = await getRuntimeContext(request, { requireAuth: false });
   const providedApiKey = readApiKeyHeader(request);
 
   const slug = normalizeSlug(context.params?.slug);
