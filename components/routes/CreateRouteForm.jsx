@@ -45,6 +45,7 @@ export default function CreateRouteForm({ projectId }) {
     payload.enabled = toBoolean(payload.enabled);
     payload.responseIsJson = toBoolean(payload.responseIsJson);
     payload.templateEnabled = toBoolean(payload.templateEnabled);
+    payload.requireApiKey = toBoolean(payload.requireApiKey ?? true);
     payload.projectId = projectId;
     payload.responseDelayMs = Number(payload.responseDelayMs || 0);
 
@@ -117,6 +118,9 @@ export default function CreateRouteForm({ projectId }) {
             <label htmlFor="route-delay">Delay (ms)</label>
             <input id="route-delay" type="number" name="responseDelayMs" placeholder="0" min="0" />
           </div>
+          <label className="field" style={{ flexDirection: 'row', gap: '8px', alignItems: 'center' }}>
+            <input type="checkbox" name="requireApiKey" defaultChecked /> Require x-api-key header
+          </label>
         </div>
 
         <div className="form-section">

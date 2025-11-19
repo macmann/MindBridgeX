@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { Buffer } from 'buffer';
 
 import AppShell from '../../../components/dashboard/AppShell.jsx';
+import ApiKeyField from '../../../components/shared/ApiKeyField.jsx';
 import { getDashboardContext } from '../../../lib/dashboard-context.js';
 import prisma from '../../../lib/prisma.js';
 import { buildAbsoluteUrl, getMcpBaseUrl } from '../../../lib/url-utils.js';
@@ -218,7 +219,15 @@ export default async function McpServerDetailPage({ params, searchParams }) {
                 <dt>Last updated</dt>
                 <dd>{formatDate(server.updatedAt)}</dd>
               </div>
+              <div>
+                <dt>Security</dt>
+                <dd>{server.requireApiKey ? 'x-api-key required' : 'Public (no API key)'}</dd>
+              </div>
             </dl>
+          </div>
+          <div className="detail-card">
+            <h3>API key</h3>
+            <ApiKeyField value={server.requireApiKey ? server.apiKey : ''} helperText={apiKeyHelper} />
           </div>
 
           <div className="detail-card">

@@ -74,6 +74,8 @@ function serializeServer(server) {
     description: server.description,
     baseUrl: server.baseUrl,
     isEnabled: server.isEnabled,
+    requireApiKey: server.requireApiKey,
+    apiKey: server.apiKey,
     createdAt: server.createdAt,
     updatedAt: server.updatedAt,
     mcpPath: `/mcp/${server.slug}`
@@ -147,7 +149,8 @@ export async function POST(req) {
       slug,
       description: cleanString(body?.description),
       baseUrl: cleanString(body?.baseUrl),
-      isEnabled: toBoolean(body?.isEnabled)
+      isEnabled: toBoolean(body?.isEnabled),
+      requireApiKey: toBoolean(body?.requireApiKey ?? true)
     }
   });
 
@@ -180,6 +183,7 @@ export async function PATCH(req) {
   if (body?.description !== undefined) updates.description = cleanString(body.description);
   if (body?.baseUrl !== undefined) updates.baseUrl = cleanString(body.baseUrl);
   if (body?.isEnabled !== undefined) updates.isEnabled = toBoolean(body.isEnabled);
+  if (body?.requireApiKey !== undefined) updates.requireApiKey = toBoolean(body.requireApiKey);
   if (body?.slug !== undefined) {
     let slug;
     try {

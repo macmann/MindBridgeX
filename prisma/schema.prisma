@@ -117,6 +117,8 @@ model MockRoute {
   method          String
   path            String
   enabled         Boolean  @default(true)
+  requireApiKey   Boolean  @default(true)
+  apiKey          String   @unique @default(cuid())
   matchHeaders    Json?
   responseStatus  Int      @default(200)
   responseHeaders Json?
@@ -156,6 +158,8 @@ model McpServer {
   description String?
   baseUrl     String?
   isEnabled   Boolean  @default(true)
+  requireApiKey Boolean @default(true)
+  apiKey       String   @unique @default(cuid())
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

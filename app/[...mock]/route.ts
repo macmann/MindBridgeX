@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 
 import prisma from '../../lib/prisma.js';
-import { getRuntimeContext } from '../../lib/runtime-context';
+import { getRuntimeContext, readApiKeyHeader } from '../../lib/runtime-context';
 import { renderTemplate } from '../../gui-mock-api/templates.js';
 
 export const dynamic = 'force-dynamic';
@@ -67,8 +67,26 @@ function buildTemplateContext({ request, path, route, rawBody, jsonBody }) {
 }
 
 async function selectMockRoute({ userId, projectId, method, path }) {
+  if (!userId || !projectId) {
+    return null;
+  }
   return prisma.mockRoute.findFirst({
     where: { userId, projectId, method, path, enabled: true },
+    include: { vars: true },
+  });
+}
+
+async function selectMockRouteByApiKey({ apiKey }) {
+  if (!apiKey) return null;
+  return prisma.mockRoute.findFirst({
+    where: { apiKey, enabled: true },
+    include: { vars: true },
+  });
+}
+
+async function selectPublicMockRoute({ method, path }) {
+  return prisma.mockRoute.findFirst({
+    where: { method, path, enabled: true, requireApiKey: false },
     include: { vars: true },
   });
 }
@@ -92,20 +110,36 @@ async function handleMockRequest(request, context) {
 
   const path = buildPathFromParams(context.params || {});
 
-  let runtime;
-  try {
-    runtime = await getRuntimeContext(request);
-  } catch (err) {
-    const status = err?.status || 500;
-    return NextResponse.json({ error: err?.message || 'Unable to resolve user context' }, { status });
-  }
+  const runtime = await getRuntimeContext(request);
+  const providedApiKey = readApiKeyHeader(request);
 
-  const route = await selectMockRoute({
-    userId: runtime.userId,
-    projectId: runtime.project?.id,
+  let route = await selectMockRoute({
+    userId: runtime?.userId,
+    projectId: runtime?.project?.id,
     method,
     path,
   });
+
+  if (!route && runtime && !providedApiKey) {
+    return NextResponse.json({ error: 'Route not found' }, { status: 404 });
+  }
+
+  if (!route) {
+    if (providedApiKey) {
+      route = await selectMockRouteByApiKey({ apiKey: providedApiKey });
+      if (!route) {
+        return NextResponse.json({ error: 'Invalid API key' }, { status: 401 });
+      }
+      if (route.method !== method || route.path !== path) {
+        return NextResponse.json({ error: 'API key does not match this route' }, { status: 404 });
+      }
+    } else {
+      route = await selectPublicMockRoute({ method, path });
+      if (!route) {
+        return NextResponse.json({ error: 'Missing API key' }, { status: 401 });
+      }
+    }
+  }
 
   if (!route) {
     return NextResponse.json({ error: 'Route not found' }, { status: 404 });

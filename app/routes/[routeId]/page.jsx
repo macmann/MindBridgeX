@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import AppShell from '../../../components/dashboard/AppShell.jsx';
+import ApiKeyField from '../../../components/shared/ApiKeyField.jsx';
 import { getDashboardContext } from '../../../lib/dashboard-context.js';
 import prisma from '../../../lib/prisma.js';
 import { formatRouteOpenApiDocument } from '../../../lib/mock-route-openapi.js';
@@ -140,6 +141,10 @@ export default async function RouteDetailPage({ params, searchParams }) {
                 <dt>Response delay</dt>
                 <dd>{route.responseDelayMs} ms</dd>
               </div>
+              <div>
+                <dt>Security</dt>
+                <dd>{route.requireApiKey ? 'x-api-key required' : 'Public (no API key)'}</dd>
+              </div>
             </dl>
           </div>
 
@@ -201,6 +206,10 @@ export default async function RouteDetailPage({ params, searchParams }) {
                 <dd>{formatDate(route.updatedAt)}</dd>
               </div>
             </dl>
+          </div>
+          <div className="detail-card">
+            <h3>API key</h3>
+            <ApiKeyField value={route.requireApiKey ? route.apiKey : ''} helperText={apiKeyHelper} />
           </div>
         </div>
 

@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 
 import prisma from '../../../lib/prisma.js';
-import { getRuntimeContext } from '../../../lib/runtime-context';
+import { getRuntimeContext, readApiKeyHeader } from '../../../lib/runtime-context';
 import { dispatchMcpRpc, DEFAULT_PROTOCOL_VERSION } from '../../../lib/mcp-dispatcher';
 
 export const dynamic = 'force-dynamic';
@@ -33,8 +33,26 @@ function normalizeSlug(value) {
 }
 
 async function loadServer({ userId, projectId, slug }) {
+  if (!userId || !projectId) {
+    return null;
+  }
   return prisma.mcpServer.findFirst({
     where: { userId, projectId, slug, isEnabled: true },
+    include: { authConfig: true },
+  });
+}
+
+async function loadServerByApiKey(apiKey) {
+  if (!apiKey) return null;
+  return prisma.mcpServer.findFirst({
+    where: { apiKey, isEnabled: true },
+    include: { authConfig: true },
+  });
+}
+
+async function loadPublicServer(slug) {
+  return prisma.mcpServer.findFirst({
+    where: { slug, isEnabled: true, requireApiKey: false },
     include: { authConfig: true },
   });
 }
@@ -50,20 +68,36 @@ function ensureJsonRequest(request) {
 }
 
 export async function POST(request, context) {
-  let runtime;
-  try {
-    runtime = await getRuntimeContext(request);
-  } catch (err) {
-    const status = err?.status || 500;
-    return jsonRpcResponse(jsonRpcError(null, -32000, err?.message || 'Unauthorized'), status);
-  }
+  const runtime = await getRuntimeContext(request);
+  const providedApiKey = readApiKeyHeader(request);
 
   const slug = normalizeSlug(context.params?.slug);
   if (!slug) {
     return jsonRpcResponse(jsonRpcError(null, -32602, 'Invalid MCP server slug'), 400);
   }
 
-  const server = await loadServer({ userId: runtime.userId, projectId: runtime.project?.id, slug });
+  let server = await loadServer({ userId: runtime?.userId, projectId: runtime?.project?.id, slug });
+  if (!server && runtime && !providedApiKey) {
+    return jsonRpcResponse(jsonRpcError(null, -32004, `MCP server not found for slug: ${slug}`), 404);
+  }
+
+  if (!server) {
+    if (providedApiKey) {
+      server = await loadServerByApiKey(providedApiKey);
+      if (!server) {
+        return jsonRpcResponse(jsonRpcError(null, -32000, 'Invalid API key'), 401);
+      }
+      if (server.slug !== slug) {
+        return jsonRpcResponse(jsonRpcError(null, -32004, `MCP server not found for slug: ${slug}`), 404);
+      }
+    } else {
+      server = await loadPublicServer(slug);
+      if (!server) {
+        return jsonRpcResponse(jsonRpcError(null, -32000, 'Missing API key'), 401);
+      }
+    }
+  }
+
   if (!server) {
     return jsonRpcResponse(jsonRpcError(null, -32004, `MCP server not found for slug: ${slug}`), 404);
   }

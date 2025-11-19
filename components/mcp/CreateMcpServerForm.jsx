@@ -20,6 +20,7 @@ export default function CreateMcpServerForm({ projectId }) {
 
     payload.projectId = projectId;
     payload.isEnabled = toBoolean(payload.isEnabled);
+    payload.requireApiKey = toBoolean(payload.requireApiKey ?? true);
 
     setMessage('');
     setIsSubmitting(true);
@@ -87,6 +88,9 @@ export default function CreateMcpServerForm({ projectId }) {
           </div>
           <label className="field" style={{ flexDirection: 'row', gap: '8px', alignItems: 'center' }}>
             <input type="checkbox" name="isEnabled" defaultChecked /> Enable immediately
+          </label>
+          <label className="field" style={{ flexDirection: 'row', gap: '8px', alignItems: 'center' }}>
+            <input type="checkbox" name="requireApiKey" defaultChecked /> Require x-api-key on MCP calls
           </label>
         </div>
       </div>

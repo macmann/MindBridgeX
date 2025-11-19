@@ -113,6 +113,8 @@ function serializeRoute(route) {
     method: route.method,
     path: route.path,
     enabled: route.enabled,
+    requireApiKey: route.requireApiKey,
+    apiKey: route.apiKey,
     matchHeaders: route.matchHeaders || {},
     responseStatus: route.responseStatus,
     responseHeaders: route.responseHeaders || {},
@@ -206,6 +208,7 @@ export async function POST(req) {
       method,
       path,
       enabled: toBoolean(body?.enabled),
+      requireApiKey: toBoolean(body?.requireApiKey ?? true),
       matchHeaders,
       responseStatus,
       responseHeaders,
@@ -285,6 +288,7 @@ export async function PATCH(req) {
   if (body?.enabled !== undefined) updates.enabled = toBoolean(body.enabled);
   if (body?.responseIsJson !== undefined) updates.responseIsJson = toBoolean(body.responseIsJson);
   if (body?.templateEnabled !== undefined) updates.templateEnabled = toBoolean(body.templateEnabled);
+  if (body?.requireApiKey !== undefined) updates.requireApiKey = toBoolean(body.requireApiKey);
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
