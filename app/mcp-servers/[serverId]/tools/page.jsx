@@ -92,6 +92,8 @@ export default async function McpToolsPage({ params, searchParams }) {
               <tbody>
                 {tools.map((tool) => {
                   const meta = describeSource(tool.inputSchema);
+                  const viewHref = withProjectHref(`/mcp-servers/${server.id}/tools/${tool.id}`, projectId);
+                  const editHref = withProjectHref(`/mcp-servers/${server.id}/tools/${tool.id}/edit`, projectId);
                   return (
                     <tr key={tool.id}>
                       <td>
@@ -110,12 +112,12 @@ export default async function McpToolsPage({ params, searchParams }) {
                       <td>{tool.baseUrl || '—'}</td>
                       <td>
                         <div className="table-actions">
-                          <button className="table-action" type="button" aria-disabled="true" title="Coming soon">
+                          <Link className="table-action" href={viewHref}>
                             View
-                          </button>
-                          <button className="table-action" type="button" aria-disabled="true" title="Coming soon">
+                          </Link>
+                          <Link className="table-action" href={editHref}>
                             Edit
-                          </button>
+                          </Link>
                           <DeleteMcpToolButton serverId={server.id} toolId={tool.id} />
                         </div>
                       </td>
