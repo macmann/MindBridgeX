@@ -126,6 +126,10 @@ model MockRoute {
   responseIsJson  Boolean  @default(false)
   responseDelayMs Int      @default(0)
   templateEnabled Boolean  @default(false)
+  responseMode    ResponseMode @default(STATIC)
+  lookupParamName String?
+  notFoundStatus  Int      @default(404)
+  notFoundBody    Json     @default("{\"error\":\"Not found\"}")
   requestSchema   Json?
   requestSampleBody String @default("")
   createdAt       DateTime @default(now())
@@ -134,6 +138,7 @@ model MockRoute {
   user    User    @relation(fields: [userId], references: [id])
   project Project @relation(fields: [projectId], references: [id])
   vars   MockRouteVar[]
+  datasets RouteDataset[]
 
   @@unique([userId, projectId, method, path])
 }
@@ -149,6 +154,27 @@ model MockRouteVar {
   route MockRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
 
   @@unique([routeId, key])
+}
+
+model RouteDataset {
+  id        String   @id @default(cuid())
+  routeId   Int
+  key       String
+  valueJson Json
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  route MockRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  @@unique([routeId, key])
+  @@index([key])
+}
+
+enum ResponseMode {
+  STATIC
+  TEMPLATE
+  DATASET_LOOKUP
 }
 
 model McpServer {

@@ -31,6 +31,7 @@ export default function RouteIoEditor({ route }) {
   const [requestMessage, setRequestMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [savingRequest, setSavingRequest] = useState(false);
+  const isDatasetMode = route.responseMode === 'DATASET_LOOKUP';
 
   const showResponse = useMemo(() => ['GET'].includes(String(route.method || '').toUpperCase()), [route.method]);
   const showRequest = useMemo(() => ['POST'].includes(String(route.method || '').toUpperCase()), [route.method]);
@@ -107,7 +108,11 @@ export default function RouteIoEditor({ route }) {
           <header className="section-heading">
             <div>
               <h3>Response editor</h3>
-              <p className="helper-text">Set the status, headers, and body returned by this route.</p>
+              <p className="helper-text">
+                {isDatasetMode
+                  ? 'Dataset lookup responses return the matching dataset JSON; status and headers still apply.'
+                  : 'Set the status, headers, and body returned by this route.'}
+              </p>
             </div>
           </header>
           <div className="form-grid">
