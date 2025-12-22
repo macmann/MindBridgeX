@@ -126,6 +126,8 @@ model MockRoute {
   responseIsJson  Boolean  @default(false)
   responseDelayMs Int      @default(0)
   templateEnabled Boolean  @default(false)
+  requestSchema   Json?
+  requestSampleBody String @default("")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

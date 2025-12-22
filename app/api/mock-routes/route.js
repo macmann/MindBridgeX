@@ -75,6 +75,38 @@ function parseJsonField(value, fallback = {}) {
   throw new Error('JSON field must be an object');
 }
 
+function normalizeJsonBody(value, { fieldName, allowPlainText }) {
+  if (value === undefined || value === null) {
+    return '';
+  }
+
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      throw new Error(`${fieldName} must be serializable JSON`);
+    }
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed === '') {
+      return '';
+    }
+    try {
+      JSON.parse(trimmed);
+      return trimmed;
+    } catch {
+      if (allowPlainText) {
+        return value;
+      }
+      throw new Error(`${fieldName} must be valid JSON`);
+    }
+  }
+
+  throw new Error(`${fieldName} must be valid JSON or a string`);
+}
+
 function toBoolean(value) {
   if (typeof value === 'boolean') return value;
   if (typeof value === 'string') {
@@ -122,6 +154,8 @@ function serializeRoute(route) {
     responseIsJson: route.responseIsJson,
     responseDelayMs: route.responseDelayMs,
     templateEnabled: route.templateEnabled,
+    requestSchema: route.requestSchema || null,
+    requestSampleBody: route.requestSampleBody ?? '',
     createdAt: route.createdAt,
     updatedAt: route.updatedAt,
     vars: (route.vars || []).map((variable) => ({
@@ -199,6 +233,31 @@ export async function POST(req) {
     return NextResponse.json({ error: err.message }, { status: 400 });
   }
 
+  const responseIsJson = toBoolean(body?.responseIsJson);
+  let normalizedResponseBody;
+  let normalizedRequestSampleBody;
+  try {
+    normalizedResponseBody = normalizeJsonBody(body?.responseBody ?? '', {
+      fieldName: 'responseBody',
+      allowPlainText: !responseIsJson,
+    });
+    normalizedRequestSampleBody = normalizeJsonBody(body?.requestSampleBody ?? '', {
+      fieldName: 'requestSampleBody',
+      allowPlainText: false,
+    });
+  } catch (err) {
+    return NextResponse.json({ error: err.message }, { status: 400 });
+  }
+
+  let requestSchema;
+  if (body?.requestSchema !== undefined) {
+    try {
+      requestSchema = parseJsonField(body.requestSchema, null);
+    } catch (err) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+  }
+
   const route = await prisma.mockRoute.create({
     data: {
       userId,
@@ -212,10 +271,12 @@ export async function POST(req) {
       matchHeaders,
       responseStatus,
       responseHeaders,
-      responseBody: body?.responseBody ?? '',
-      responseIsJson: toBoolean(body?.responseIsJson),
+      responseBody: normalizedResponseBody,
+      responseIsJson,
       responseDelayMs,
-      templateEnabled: toBoolean(body?.templateEnabled)
+      templateEnabled: toBoolean(body?.templateEnabled),
+      requestSchema,
+      requestSampleBody: normalizedRequestSampleBody,
     },
     include: { vars: true }
   });
@@ -270,7 +331,20 @@ export async function PATCH(req) {
       return NextResponse.json({ error: err.message }, { status: 400 });
     }
   }
-  if (body?.responseBody !== undefined) updates.responseBody = body.responseBody ?? '';
+  if (body?.responseIsJson !== undefined) updates.responseIsJson = toBoolean(body.responseIsJson);
+  const normalizedResponseIsJson =
+    updates.responseIsJson !== undefined ? updates.responseIsJson : existing.responseIsJson;
+
+  if (body?.responseBody !== undefined) {
+    try {
+      updates.responseBody = normalizeJsonBody(body.responseBody, {
+        fieldName: 'responseBody',
+        allowPlainText: !normalizedResponseIsJson,
+      });
+    } catch (err) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+  }
   if (body?.responseStatus !== undefined) {
     try {
       updates.responseStatus = toNumber(body.responseStatus, existing.responseStatus);
@@ -286,9 +360,25 @@ export async function PATCH(req) {
     }
   }
   if (body?.enabled !== undefined) updates.enabled = toBoolean(body.enabled);
-  if (body?.responseIsJson !== undefined) updates.responseIsJson = toBoolean(body.responseIsJson);
   if (body?.templateEnabled !== undefined) updates.templateEnabled = toBoolean(body.templateEnabled);
   if (body?.requireApiKey !== undefined) updates.requireApiKey = toBoolean(body.requireApiKey);
+  if (body?.requestSampleBody !== undefined) {
+    try {
+      updates.requestSampleBody = normalizeJsonBody(body.requestSampleBody, {
+        fieldName: 'requestSampleBody',
+        allowPlainText: false,
+      });
+    } catch (err) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+  }
+  if (body?.requestSchema !== undefined) {
+    try {
+      updates.requestSchema = parseJsonField(body.requestSchema, null);
+    } catch (err) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+  }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });

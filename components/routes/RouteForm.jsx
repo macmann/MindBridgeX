@@ -32,6 +32,9 @@ export default function RouteForm({ projectId, initialRoute }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isEdit = Boolean(initialRoute?.id);
+  const initialRequestSchema = initialRoute?.requestSchema
+    ? JSON.stringify(initialRoute.requestSchema, null, 2)
+    : '';
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -49,6 +52,7 @@ export default function RouteForm({ projectId, initialRoute }) {
     payload.templateEnabled = toBoolean(payload.templateEnabled);
     payload.requireApiKey = toBoolean(payload.requireApiKey);
     payload.responseDelayMs = Number(payload.responseDelayMs || 0);
+    payload.requestSchema = payload.requestSchema?.trim() ? payload.requestSchema : null;
 
     if (isEdit) {
       payload.id = initialRoute.id;
@@ -210,6 +214,33 @@ export default function RouteForm({ projectId, initialRoute }) {
           <label className="field" style={{ flexDirection: 'row', gap: '8px', alignItems: 'center' }}>
             <input type="checkbox" name="templateEnabled" defaultChecked={initialRoute ? initialRoute.templateEnabled : false} /> Enable Handlebars templates
           </label>
+        </div>
+
+        <div className="form-section">
+          <h3>Step 4 – Request sample (POST/PUT/PATCH)</h3>
+          <p>Add an example payload or schema to show consumers how to call this mock.</p>
+          <div className="field">
+            <label htmlFor="route-request-sample">Sample request body</label>
+            <textarea
+              id="route-request-sample"
+              name="requestSampleBody"
+              rows={6}
+              placeholder={'{\n  "name": "Example"\n}'}
+              defaultValue={initialRoute?.requestSampleBody || ''}
+            />
+            <p className="helper-text">Must be valid JSON; leave blank to skip.</p>
+          </div>
+          <div className="field">
+            <label htmlFor="route-request-schema">Request schema (optional)</label>
+            <textarea
+              id="route-request-schema"
+              name="requestSchema"
+              rows={6}
+              placeholder={'{\n  "type": "object",\n  "properties": { "name": { "type": "string" } }\n}'}
+              defaultValue={initialRequestSchema}
+            />
+            <p className="helper-text">Provide JSON Schema to document the expected request.</p>
+          </div>
         </div>
       </div>
       {message ? <p className="error">{message}</p> : null}
