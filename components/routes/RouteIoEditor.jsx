@@ -153,7 +153,7 @@ export default function RouteIoEditor({ route }) {
               rows={8}
               value={responseBody}
               onChange={(e) => setResponseBody(e.target.value)}
-              placeholder="{\n  \"message\": \"ok\"\n}"
+              placeholder={`{\n  "message": "ok"\n}`}
             />
           </div>
           {message ? <p className={message.toLowerCase().includes('unable') ? 'error' : 'helper-text'}>{message}</p> : null}
@@ -177,7 +177,7 @@ export default function RouteIoEditor({ route }) {
               rows={8}
               value={requestSampleBody}
               onChange={(e) => setRequestSampleBody(e.target.value)}
-              placeholder="{\n  \"name\": \"Example\"\n}"
+              placeholder={`{\n  "name": "Example"\n}`}
             />
           </div>
           <div className="field">
@@ -186,7 +186,7 @@ export default function RouteIoEditor({ route }) {
               rows={6}
               value={requestSchema}
               onChange={(e) => setRequestSchema(e.target.value)}
-              placeholder="{\n  \"type\": \"object\",\n  \"properties\": { \"name\": { \"type\": \"string\" } }\n}"
+              placeholder={`{\n  "type": "object",\n  "properties": { "name": { "type": "string" } }\n}`}
             />
             <p className="helper-text">Provide JSON Schema to show in the UI and future API docs.</p>
           </div>
