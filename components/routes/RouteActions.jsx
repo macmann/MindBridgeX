@@ -38,6 +38,9 @@ export default function RouteActions({ routeId, projectId }) {
       <Link className="table-action" href={`/routes/${routeId}/edit${projectSuffix}`}>
         Edit
       </Link>
+      <Link className="table-action" href={`/routes/${routeId}/dataset${projectSuffix}`}>
+        Dataset
+      </Link>
       <button className="table-action" type="button" onClick={handleDelete} disabled={isDeleting}>
         {isDeleting ? 'Deleting…' : 'Delete'}
       </button>

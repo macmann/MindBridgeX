@@ -148,7 +148,8 @@ API-MCPGenTool/
   ```
   The `render:build` script chains `db:generate`, `db:migrate:deploy`, and `build` so Prisma runs inside `npm run`'s environment
   (which automatically exposes `./node_modules/.bin`). This avoids relying on `npx`, which some managed builders omit from the
-  PATH even when `npm` is available.
+  PATH even when `npm` is available. It also guarantees new tables (such as the RouteDataset mock-response data store) are
+  migrated before the service boots.
 - **Start command** (Render dashboard → _Start Command_):
   ```bash
   npm start

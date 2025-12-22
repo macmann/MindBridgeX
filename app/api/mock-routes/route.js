@@ -6,6 +6,8 @@ import prisma from '../../../lib/prisma.js';
 import { findProjectForUser } from '../../../lib/user-context.js';
 
 const SUPPORTED_HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD']);
+const RESPONSE_MODES = new Set(['STATIC', 'TEMPLATE', 'DATASET_LOOKUP']);
+const DEFAULT_NOT_FOUND_BODY = { error: 'Not found' };
 
 async function requireUser() {
   const session = await getServerSession(authOptions);
@@ -135,6 +137,14 @@ function cleanString(value) {
   return trimmed === '' ? null : trimmed;
 }
 
+function normalizeResponseMode(value) {
+  const mode = String(value || 'STATIC').trim().toUpperCase();
+  if (!RESPONSE_MODES.has(mode)) {
+    throw new Error('Invalid responseMode');
+  }
+  return mode;
+}
+
 function serializeRoute(route) {
   return {
     id: route.id,
@@ -154,6 +164,10 @@ function serializeRoute(route) {
     responseIsJson: route.responseIsJson,
     responseDelayMs: route.responseDelayMs,
     templateEnabled: route.templateEnabled,
+    responseMode: route.responseMode,
+    lookupParamName: route.lookupParamName,
+    notFoundStatus: route.notFoundStatus,
+    notFoundBody: route.notFoundBody,
     requestSchema: route.requestSchema || null,
     requestSampleBody: route.requestSampleBody ?? '',
     createdAt: route.createdAt,
@@ -215,20 +229,24 @@ export async function POST(req) {
   let path;
   let matchHeaders;
   let responseHeaders;
+  let responseMode;
   try {
     method = normalizeMethod(body?.method);
     path = normalizePath(body?.path);
     matchHeaders = parseJsonField(body?.matchHeaders);
     responseHeaders = parseJsonField(body?.responseHeaders);
+    responseMode = normalizeResponseMode(body?.responseMode);
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 400 });
   }
 
   let responseStatus;
   let responseDelayMs;
+  let notFoundStatus;
   try {
     responseStatus = toNumber(body?.responseStatus ?? 200, 200);
     responseDelayMs = toNumber(body?.responseDelayMs ?? 0, 0);
+    notFoundStatus = toNumber(body?.notFoundStatus ?? 404, 404);
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 400 });
   }
@@ -236,6 +254,7 @@ export async function POST(req) {
   const responseIsJson = toBoolean(body?.responseIsJson);
   let normalizedResponseBody;
   let normalizedRequestSampleBody;
+  let notFoundBody;
   try {
     normalizedResponseBody = normalizeJsonBody(body?.responseBody ?? '', {
       fieldName: 'responseBody',
@@ -245,6 +264,7 @@ export async function POST(req) {
       fieldName: 'requestSampleBody',
       allowPlainText: false,
     });
+    notFoundBody = parseJsonField(body?.notFoundBody, DEFAULT_NOT_FOUND_BODY);
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 400 });
   }
@@ -275,6 +295,10 @@ export async function POST(req) {
       responseIsJson,
       responseDelayMs,
       templateEnabled: toBoolean(body?.templateEnabled),
+      responseMode,
+      lookupParamName: cleanString(body?.lookupParamName),
+      notFoundStatus,
+      notFoundBody,
       requestSchema,
       requestSampleBody: normalizedRequestSampleBody,
     },
@@ -331,6 +355,16 @@ export async function PATCH(req) {
       return NextResponse.json({ error: err.message }, { status: 400 });
     }
   }
+  if (body?.responseMode !== undefined) {
+    try {
+      updates.responseMode = normalizeResponseMode(body.responseMode);
+    } catch (err) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+  }
+  if (body?.lookupParamName !== undefined) {
+    updates.lookupParamName = cleanString(body.lookupParamName);
+  }
   if (body?.responseIsJson !== undefined) updates.responseIsJson = toBoolean(body.responseIsJson);
   const normalizedResponseIsJson =
     updates.responseIsJson !== undefined ? updates.responseIsJson : existing.responseIsJson;
@@ -352,6 +386,13 @@ export async function PATCH(req) {
       return NextResponse.json({ error: err.message }, { status: 400 });
     }
   }
+  if (body?.notFoundStatus !== undefined) {
+    try {
+      updates.notFoundStatus = toNumber(body.notFoundStatus, existing.notFoundStatus ?? 404);
+    } catch (err) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+  }
   if (body?.responseDelayMs !== undefined) {
     try {
       updates.responseDelayMs = toNumber(body.responseDelayMs, existing.responseDelayMs);
@@ -362,6 +403,13 @@ export async function PATCH(req) {
   if (body?.enabled !== undefined) updates.enabled = toBoolean(body.enabled);
   if (body?.templateEnabled !== undefined) updates.templateEnabled = toBoolean(body.templateEnabled);
   if (body?.requireApiKey !== undefined) updates.requireApiKey = toBoolean(body.requireApiKey);
+  if (body?.notFoundBody !== undefined) {
+    try {
+      updates.notFoundBody = parseJsonField(body.notFoundBody, DEFAULT_NOT_FOUND_BODY);
+    } catch (err) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+  }
   if (body?.requestSampleBody !== undefined) {
     try {
       updates.requestSampleBody = normalizeJsonBody(body.requestSampleBody, {

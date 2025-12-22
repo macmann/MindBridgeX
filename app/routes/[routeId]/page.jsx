@@ -222,6 +222,18 @@ export default async function RouteDetailPage({ params, searchParams }) {
                 <dd>{route.responseIsJson ? 'JSON' : 'Plain text'}</dd>
               </div>
               <div>
+                <dt>Response mode</dt>
+                <dd>{route.responseMode ? route.responseMode.replaceAll('_', ' ') : 'STATIC'}</dd>
+              </div>
+              {route.lookupParamName ? (
+                <div>
+                  <dt>Lookup param</dt>
+                  <dd>
+                    <code>{route.lookupParamName}</code>
+                  </dd>
+                </div>
+              ) : null}
+              <div>
                 <dt>Templates</dt>
                 <dd>{route.templateEnabled ? 'Enabled' : 'Disabled'}</dd>
               </div>

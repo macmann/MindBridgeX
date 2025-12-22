@@ -30,6 +30,7 @@ export default function RouteForm({ projectId, initialRoute }) {
   const searchParams = useSearchParams();
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [responseMode, setResponseMode] = useState(initialRoute?.responseMode || 'STATIC');
 
   const isEdit = Boolean(initialRoute?.id);
   const initialRequestSchema = initialRoute?.requestSchema
@@ -40,6 +41,8 @@ export default function RouteForm({ projectId, initialRoute }) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const payload = Object.fromEntries(formData.entries());
+
+    payload.responseMode = responseMode;
 
     const templateKey = payload.quickTemplate;
     if (!payload.responseBody && templates[templateKey]) {
@@ -53,6 +56,16 @@ export default function RouteForm({ projectId, initialRoute }) {
     payload.requireApiKey = toBoolean(payload.requireApiKey);
     payload.responseDelayMs = Number(payload.responseDelayMs || 0);
     payload.requestSchema = payload.requestSchema?.trim() ? payload.requestSchema : null;
+    payload.lookupParamName = payload.lookupParamName?.trim() || null;
+    payload.responseMode = (payload.responseMode || 'STATIC').toUpperCase();
+    payload.notFoundStatus = Number(payload.notFoundStatus || 404);
+
+    if (payload.responseMode === 'TEMPLATE') {
+      payload.templateEnabled = true;
+    }
+    if (payload.responseMode === 'DATASET_LOOKUP') {
+      payload.responseIsJson = true;
+    }
 
     if (isEdit) {
       payload.id = initialRoute.id;
@@ -198,6 +211,34 @@ export default function RouteForm({ projectId, initialRoute }) {
               ))}
             </select>
           </div>
+          <div className="field">
+            <label htmlFor="route-response-mode">Response mode</label>
+            <select
+              id="route-response-mode"
+              name="responseMode"
+              value={responseMode}
+              onChange={(e) => setResponseMode(e.target.value)}
+            >
+              <option value="STATIC">Static body</option>
+              <option value="TEMPLATE">Handlebars template</option>
+              <option value="DATASET_LOOKUP">Dataset lookup</option>
+            </select>
+            <p className="helper-text">
+              Static returns the configured body, template renders Handlebars, dataset looks up responses by route params.
+            </p>
+          </div>
+          {responseMode === 'DATASET_LOOKUP' ? (
+            <div className="field">
+              <label htmlFor="route-lookup-param">Lookup param name</label>
+              <input
+                id="route-lookup-param"
+                name="lookupParamName"
+                placeholder="bookingId"
+                defaultValue={initialRoute?.lookupParamName || ''}
+              />
+              <p className="helper-text">Matches the path parameter used to select dataset records.</p>
+            </div>
+          ) : null}
           <div className="field">
             <label htmlFor="route-response">Response body</label>
             <textarea
