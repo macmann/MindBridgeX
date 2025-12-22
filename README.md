@@ -167,6 +167,10 @@ API-MCPGenTool/
 - Response: `{ "status": "ok", "database": "ok" | "unavailable" }`
 - Use this for uptime checks on Render, Railway, or other orchestrators.
 
+### Dev-only regression check
+
+- Run `node scripts/dev-checks/mock-route-regression.mjs` after setting `DATABASE_URL` (and optionally `MOCK_BASE_URL` when the Next.js server is running) to quickly verify mock routes can store GET responses and POST request samples end-to-end.
+
 ### Deployment Checklist
 
 - Copy `.env.example` to `.env` and fill in values.

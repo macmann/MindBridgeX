@@ -7,6 +7,7 @@ import { getDashboardContext } from '../../../lib/dashboard-context.js';
 import prisma from '../../../lib/prisma.js';
 import { formatRouteOpenApiDocument } from '../../../lib/mock-route-openapi.js';
 import { buildAbsoluteUrl, getMockBaseUrl } from '../../../lib/url-utils.js';
+import RouteIoEditor from '../../../components/routes/RouteIoEditor.jsx';
 import '../../../components/detail/detail-page.css';
 
 const apiKeyHelper = 'Use this key when calling the mock server via x-api-key.';
@@ -51,6 +52,28 @@ function formatResponseBody(route) {
   return route.responseBody;
 }
 
+function formatRequestBody(route) {
+  if (!route?.requestSampleBody) {
+    return 'No request sample provided.';
+  }
+  try {
+    return JSON.stringify(JSON.parse(route.requestSampleBody), null, 2);
+  } catch {
+    return route.requestSampleBody;
+  }
+}
+
+function formatRequestSchema(schema) {
+  if (!schema || typeof schema !== 'object') {
+    return null;
+  }
+  try {
+    return JSON.stringify(schema, null, 2);
+  } catch {
+    return null;
+  }
+}
+
 function buildCurlCommand(route, url, headerEntries, projectApiKey) {
   const lines = [`curl -X ${route.method} '${url}'`];
   const apiKeyValue = projectApiKey || '<PROJECT_API_KEY>';
@@ -90,8 +113,11 @@ export default async function RouteDetailPage({ params, searchParams }) {
   const matchHeaderEntries = objectEntries(route.matchHeaders);
   const responseHeaderEntries = objectEntries(route.responseHeaders);
   const responseBody = formatResponseBody(route);
+  const requestBody = formatRequestBody(route);
+  const requestSchema = formatRequestSchema(route.requestSchema);
   const openApiSpec = formatRouteOpenApiDocument(route, { serverUrl: mockBaseUrl });
   const curlCommand = buildCurlCommand(route, fullUrl, matchHeaderEntries, projectApiKey);
+  const routeData = JSON.parse(JSON.stringify(route));
 
   return (
     <AppShell session={session} projects={projects} activeProjectId={projectId}>
@@ -226,9 +252,17 @@ export default async function RouteDetailPage({ params, searchParams }) {
         </div>
 
         <div className="detail-stack">
+          <h3>Request example</h3>
+          <pre className="code-block">{requestBody}</pre>
+          {requestSchema ? <pre className="code-block">{requestSchema}</pre> : <p className="table-note">No request schema provided.</p>}
+        </div>
+
+        <div className="detail-stack">
           <h3>Response preview</h3>
           <pre className="code-block">{responseBody}</pre>
         </div>
+
+        <RouteIoEditor route={routeData} />
 
         <div className="detail-stack">
           <h3>Route variables</h3>
