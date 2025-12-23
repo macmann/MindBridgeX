@@ -6,6 +6,7 @@ import { getRuntimeContext, readApiKeyHeader } from '../../lib/runtime-context';
 import { findMatchingRoute } from '../../lib/mock-route-matcher.js';
 import { renderTemplate } from '../../gui-mock-api/templates.js';
 import { resolveDatasetPayload } from '../../lib/dataset-lookup.js';
+import { normalizeJson } from '../../lib/normalize-json.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -102,11 +103,14 @@ async function selectPublicMockRoute({ method, path }) {
 
 function buildResponsePayload(route, renderedBody) {
   if (route.responseIsJson) {
-    const parsed = safeJsonParse(renderedBody);
-    if (parsed === null) {
-      throw Object.assign(new Error('Stored response is not valid JSON'), { status: 500 });
+    try {
+      return normalizeJson(renderedBody ?? '');
+    } catch (err) {
+      const error = new Error('Invalid JSON in route.responseBody');
+      error.status = 500;
+      error.cause = err;
+      throw error;
     }
-    return parsed;
   }
   return { body: renderedBody ?? '' };
 }
@@ -173,8 +177,13 @@ async function handleMockRequest(request, context) {
   }
 
   if (route.responseMode === 'DATASET_LOOKUP') {
-    const { payload, status } = await resolveDatasetPayload(route, params, request);
-    return NextResponse.json(payload, { status, headers });
+    try {
+      const { payload, status } = await resolveDatasetPayload(route, params, request);
+      return NextResponse.json(payload, { status, headers });
+    } catch (err) {
+      const status = err?.status || 500;
+      return NextResponse.json({ error: err?.message || 'Failed to resolve dataset response' }, { status });
+    }
   }
 
   const templateContext = buildTemplateContext({ request, path, route, rawBody, jsonBody, params });
