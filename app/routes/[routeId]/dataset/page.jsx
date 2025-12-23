@@ -60,6 +60,7 @@ export default async function RouteDatasetPage({ params, searchParams }) {
           routeMethod={route.method}
           routePath={route.path}
           lookupParamName={route.lookupParamName}
+          responseFields={route.responseFieldsJson || []}
           initialRecords={initialRecords}
         />
       </section>

@@ -5,6 +5,7 @@ import prisma from '../../lib/prisma.js';
 import { getRuntimeContext, readApiKeyHeader } from '../../lib/runtime-context';
 import { findMatchingRoute } from '../../lib/mock-route-matcher.js';
 import { renderTemplate } from '../../gui-mock-api/templates.js';
+import { resolveDatasetPayload } from '../../lib/dataset-lookup.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,27 +68,6 @@ function buildTemplateContext({ request, path, route, rawBody, jsonBody, params 
     vars,
     now: new Date().toISOString(),
   };
-}
-
-async function resolveDatasetPayload(route, params, request) {
-  const url = new URL(request.url);
-  const lookupKey = route.lookupParamName
-    ? params?.[route.lookupParamName] ?? url.searchParams.get(route.lookupParamName)
-    : undefined;
-
-  if (!lookupKey) {
-    return { status: route.notFoundStatus || 404, payload: route.notFoundBody || { error: 'Not found' } };
-  }
-
-  const record = await prisma.routeDataset.findFirst({
-    where: { routeId: route.id, key: String(lookupKey), enabled: true },
-  });
-
-  if (!record) {
-    return { status: route.notFoundStatus || 404, payload: route.notFoundBody || { error: 'Not found' } };
-  }
-
-  return { status: 200, payload: record.valueJson };
 }
 
 async function selectMockRoute({ userId, projectId, method, path }) {

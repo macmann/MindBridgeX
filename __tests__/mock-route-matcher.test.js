@@ -16,6 +16,7 @@ describe('findMatchingRoute', () => {
     { id: 2, method: 'POST', path: '/api/flightbooking2/:bookingId' },
     { id: 3, method: 'GET', path: '/mynew/getuserlist/:userId' },
     { id: 4, method: 'GET', path: '/fixed/path' },
+    { id: 5, method: 'GET', path: '/api/flightbooking3/:bookingId?' },
   ];
 
   it('matches parameterized paths and extracts params', () => {
@@ -41,5 +42,19 @@ describe('findMatchingRoute', () => {
   it('returns null when no route matches', () => {
     const match = findMatchingRoute(routes, 'DELETE', '/api/flightbooking2/A2BCS');
     assert.equal(match, null);
+  });
+
+  it('matches optional parameters when present', () => {
+    const match = findMatchingRoute(routes, 'GET', '/api/flightbooking3/A1B2C3');
+    assert.ok(match);
+    assert.equal(match.route.id, 5);
+    assert.deepEqual(match.params, { bookingId: 'A1B2C3' });
+  });
+
+  it('matches optional parameters when missing', () => {
+    const match = findMatchingRoute(routes, 'GET', '/api/flightbooking3');
+    assert.ok(match);
+    assert.equal(match.route.id, 5);
+    assert.deepEqual(match.params, { bookingId: undefined });
   });
 });
