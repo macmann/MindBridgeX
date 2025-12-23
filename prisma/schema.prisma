@@ -127,6 +127,8 @@ model MockRoute {
   responseDelayMs Int      @default(0)
   templateEnabled Boolean  @default(false)
   responseMode    ResponseMode @default(STATIC)
+  responseFieldsJson Json?
+  returnAllWhenNoKey Boolean @default(true)
   lookupParamName String?
   notFoundStatus  Int      @default(404)
   notFoundBody    Json     @default("{\"error\":\"Not found\"}")

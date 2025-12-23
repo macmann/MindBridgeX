@@ -7,6 +7,7 @@ import { findProjectForUser } from '../../../lib/user-context.js';
 
 const SUPPORTED_HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD']);
 const RESPONSE_MODES = new Set(['STATIC', 'TEMPLATE', 'DATASET_LOOKUP']);
+const RESPONSE_FIELD_TYPES = new Set(['string', 'number', 'boolean', 'date', 'datetime']);
 const DEFAULT_NOT_FOUND_BODY = { error: 'Not found' };
 
 async function requireUser() {
@@ -145,6 +146,35 @@ function normalizeResponseMode(value) {
   return mode;
 }
 
+function parseResponseFields(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+  if (!Array.isArray(parsed)) {
+    throw new Error('responseFieldsJson must be an array');
+  }
+
+  const fields = parsed
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+      const path = String(item.path || '').trim();
+      if (!path) return null;
+      const typeCandidate = String(item.type || '').trim();
+      const type = RESPONSE_FIELD_TYPES.has(typeCandidate) ? typeCandidate : 'string';
+      const cleaned = { path, type };
+      if (item.label !== undefined && item.label !== null) {
+        const label = String(item.label || '').trim();
+        if (label) cleaned.label = label;
+      }
+      return cleaned;
+    })
+    .filter(Boolean);
+
+  return fields;
+}
+
 function serializeRoute(route) {
   return {
     id: route.id,
@@ -165,6 +195,8 @@ function serializeRoute(route) {
     responseDelayMs: route.responseDelayMs,
     templateEnabled: route.templateEnabled,
     responseMode: route.responseMode,
+    responseFieldsJson: route.responseFieldsJson || [],
+    returnAllWhenNoKey: route.returnAllWhenNoKey ?? true,
     lookupParamName: route.lookupParamName,
     notFoundStatus: route.notFoundStatus,
     notFoundBody: route.notFoundBody,
@@ -255,6 +287,7 @@ export async function POST(req) {
   let normalizedResponseBody;
   let normalizedRequestSampleBody;
   let notFoundBody;
+  let responseFieldsJson;
   try {
     normalizedResponseBody = normalizeJsonBody(body?.responseBody ?? '', {
       fieldName: 'responseBody',
@@ -265,6 +298,7 @@ export async function POST(req) {
       allowPlainText: false,
     });
     notFoundBody = parseJsonField(body?.notFoundBody, DEFAULT_NOT_FOUND_BODY);
+    responseFieldsJson = parseResponseFields(body?.responseFieldsJson);
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 400 });
   }
@@ -296,6 +330,8 @@ export async function POST(req) {
       responseDelayMs,
       templateEnabled: toBoolean(body?.templateEnabled),
       responseMode,
+      responseFieldsJson,
+      returnAllWhenNoKey: toBoolean(body?.returnAllWhenNoKey ?? true),
       lookupParamName: cleanString(body?.lookupParamName),
       notFoundStatus,
       notFoundBody,
@@ -355,12 +391,22 @@ export async function PATCH(req) {
       return NextResponse.json({ error: err.message }, { status: 400 });
     }
   }
+  if (body?.responseFieldsJson !== undefined) {
+    try {
+      updates.responseFieldsJson = parseResponseFields(body.responseFieldsJson);
+    } catch (err) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+  }
   if (body?.responseMode !== undefined) {
     try {
       updates.responseMode = normalizeResponseMode(body.responseMode);
     } catch (err) {
       return NextResponse.json({ error: err.message }, { status: 400 });
     }
+  }
+  if (body?.returnAllWhenNoKey !== undefined) {
+    updates.returnAllWhenNoKey = toBoolean(body.returnAllWhenNoKey);
   }
   if (body?.lookupParamName !== undefined) {
     updates.lookupParamName = cleanString(body.lookupParamName);
