@@ -172,7 +172,9 @@ export default function RouteDatasetManager({
               name="valueJson"
               required
               rows={10}
-              placeholder="{\n  \"message\": \"Hello\"\n}"
+              placeholder={`{
+  "message": "Hello"
+}`}
               value={valueInput}
               onChange={(event) => setValueInput(event.target.value)}
             />
