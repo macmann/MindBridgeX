@@ -29,7 +29,7 @@ describe('resolveDatasetPayload', () => {
       assert.equal(where.routeId, route.id);
       return [
         { key: 'a', valueJson: { foo: 'bar' } },
-        { key: 'b', valueJson: { fizz: 'buzz' } },
+        { key: 'b', valueJson: JSON.stringify({ fizz: 'buzz' }) },
       ];
     };
     prisma.routeDataset.findFirst = () => {
@@ -63,5 +63,17 @@ describe('resolveDatasetPayload', () => {
     const result = await resolveDatasetPayload(route, {}, request, { prismaClient: prisma });
     assert.equal(result.status, 200);
     assert.deepEqual(result.payload, { id: 'ABC123', ok: true });
+  });
+
+  it('throws a helpful error when dataset JSON is invalid', async () => {
+    const route = { id: 3, lookupParamName: 'id' };
+    const request = new Request('http://example.com/mock?id=bad');
+
+    prisma.routeDataset.findMany = noop;
+    prisma.routeDataset.findFirst = async () => ({ key: 'bad', valueJson: '{oops' });
+
+    await assert.rejects(() => resolveDatasetPayload(route, {}, request, { prismaClient: prisma }), {
+      message: 'Invalid JSON in dataset.valueJson for key=bad',
+    });
   });
 });
